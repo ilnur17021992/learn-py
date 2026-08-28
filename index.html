@@ -35,6 +35,9 @@
 </head>
 <body>
 
+  <!-- Full-Page Interactive Python Snake & Particles Background Canvas -->
+  <canvas id="bgCanvas" class="bg-canvas"></canvas>
+
   <!-- Top App Navigation -->
   <header class="top-nav">
     <div class="nav-left">
@@ -70,11 +73,71 @@
 
   <!-- VIEW 1: Catalog of Topics (Cheat Sheet View) -->
   <main id="catalogView">
-    <div class="catalog-header">
-      <div class="catalog-header-left">
-        <h1>Справочник и интерактивные уроки</h1>
-        <p>Выберите интересующую тему для изучения теории и запуска кода в полноэкранной песочнице</p>
+    <div class="catalog-hero" id="catalogHero">
+      <!-- Interactive Python Keywords & Matrix Constellation Canvas -->
+      <canvas id="heroMatrixCanvas" class="hero-matrix-canvas"></canvas>
+
+      <div class="hero-intro">
+        <div class="hero-badge">⚡ WebAssembly Python 3.12</div>
+        <h1 class="hero-title">Интерактивная Лаборатория & Справочник Python</h1>
+        <p class="hero-desc">
+          Изучайте язык через живую практику прямо в браузере. Выполняйте код в реальном времени,
+          тестируйте алгоритмы и экспериментируйте без установки Python на компьютер.
+        </p>
+        <div class="hero-stats">
+          <div class="hero-stat-item">
+            <span class="hero-stat-num">27</span>
+            <span class="hero-stat-label">интерактивных тем</span>
+          </div>
+          <div class="hero-stat-item">
+            <span class="hero-stat-num">100+</span>
+            <span class="hero-stat-label">примеров кода</span>
+          </div>
+          <div class="hero-stat-item">
+            <span class="hero-stat-num">0 ms</span>
+            <span class="hero-stat-label">установки</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Interactive Quick-Run Mini-Sandbox Card -->
+      <div class="hero-sandbox-card">
+        <div class="sandbox-card-header">
+          <div class="sandbox-preset-tabs" id="heroPresetTabs">
+            <button class="hero-tab-btn active" data-preset="ascii_art" title="Генератор ASCII баннера">🎨 Логотип</button>
+            <button class="hero-tab-btn" data-preset="neural_net" title="Обучение нейросети на чистом Python">🧠 Нейросеть</button>
+            <button class="hero-tab-btn" data-preset="mandelbrot" title="ASCII-фрактал множества Мандельброта">🌀 Фрактал</button>
+          </div>
+          <div class="sandbox-header-actions">
+            <button id="heroRunBtn" class="hero-run-btn" title="Запустить код прямо здесь">
+              <span>▶</span> Запустить
+            </button>
+          </div>
+        </div>
+
+        <div class="sandbox-code-view">
+          <pre class="sandbox-code-pre"><code id="heroCodeSnippet" class="language-python"># Выберите пресет и нажмите Запустить</code></pre>
+        </div>
+
+        <div class="sandbox-terminal-view">
+          <div class="sandbox-terminal-head">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <span class="sandbox-terminal-title">Результат выполнения:</span>
+            <span id="heroExecTimeBadge" class="hero-exec-badge">готово к запуску</span>
+            <button id="heroOpenFullIdeBtn" class="hero-ide-link" title="Открыть этот скрипт в полноэкранной IDE">
+              Открыть в IDE ↗
+            </button>
+          </div>
+          <pre id="heroTerminalOutput" class="sandbox-terminal-output">Нажмите «▶ Запустить», чтобы мгновенно выполнить Python код прямо в браузере...</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="catalog-section-divider">
+      <h2>Каталог тем и разделов</h2>
+      <p>Выберите тему ниже для подробного изучения теории, разбора синтаксиса и отладки</p>
     </div>
 
     <div id="topicsGrid" class="topics-grid">

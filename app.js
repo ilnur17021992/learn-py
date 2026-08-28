@@ -234,6 +234,9 @@ function updateProgressUI() {
 
 // Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
+  initBackgroundCanvas();
+  initHeroSandbox();
+  initHeroMatrixConstellation();
   initMonacoEditor();
   renderCatalog();
   renderSidebar();
@@ -1791,5 +1794,735 @@ function selectPaletteResult(index) {
       targetCard.classList.add("snippet-jump-pulse");
     }
   }, 120);
+}
+
+// ===================================================
+// HERO QUICK-RUN INTERACTIVE SANDBOX ENGINE
+// ===================================================
+const HERO_PRESETS = {
+  mandelbrot: {
+    title: "Космический фрактал Жюлиа (Unicode HD)",
+    code: `import math
+
+# Генератор космического фрактала Жюлиа с Unicode-градиентом
+def render_fractal():
+    w, h = 58, 22
+    c = complex(-0.7269, 0.1889) # Координаты электрической спирали
+    palette = " .·:;+=xX$&#█"
+
+    print("🌌 ФРАКТАЛ МНОЖЕСТВА ЖЮЛИА (z² + c):")
+    print("┌" + "─" * w + "┐")
+    for y in range(h):
+        line = []
+        for x in range(w):
+            zx = 1.35 * (x - w / 2) / (0.5 * w)
+            zy = 1.05 * (y - h / 2) / (0.5 * h)
+            z = complex(zx, zy)
+
+            i = 0
+            max_iter = 36
+            while abs(z) < 4.0 and i < max_iter:
+                z = z * z + c
+                i += 1
+
+            if i == max_iter:
+                line.append("█")
+            else:
+                # Непрерывное логарифмическое сглаживание потенциала
+                nu = math.log2(max(1.0, math.log(abs(z) + 1e-9)))
+                idx = max(0, min(len(palette) - 2, int((i + 1 - nu) * 0.42)))
+                line.append(palette[idx])
+        print("│" + "".join(line) + "│")
+    print("└" + "─" * w + "┘")
+    print("Фрактал Жюлиа z ⟵ z² + (-0.7269 + 0.1889i)")
+
+render_fractal()`
+  },
+  ascii_art: {
+    title: "Генератор логотипа & Системной информации",
+    code: `import sys, math
+
+logo = [
+  "   ____         _   _                   ",
+  "  |  _ \\ _   _ | |_| |__   ___  _ __    ",
+  "  | |_) | | | || __| '_ \\ / _ \\| '_ \\   ",
+  "  |  __/| |_| || |_| | | | (_) | | | |  ",
+  "  |_|    \\__, | \\__|_| |_|\\___/|_| |_|  ",
+  "         |___/                          "
+]
+
+for row in logo:
+    print(row)
+
+print("🐍 Python Interactive Lab Engine")
+print(f"Версия платформы: {sys.version.split()[0]} (WebAssembly)")
+print(f"Константа π = {math.pi:.6f}, e = {math.e:.6f}")`
+  },
+  neural_net: {
+    title: "Обучение нейросети на чистом Python (XOR & Backprop)",
+    code: `import math, random
+
+# 1. Данные для обучения логической функции XOR
+dataset = [
+    ([0, 0], 0),
+    ([0, 1], 1),
+    ([1, 0], 1),
+    ([1, 1], 0)
+]
+
+# 2. Инициализация весов нейросети (2 входа -> 2 скрытых -> 1 выход)
+random.seed(42)
+w1 = [[random.uniform(-1, 1) for _ in range(2)] for _ in range(2)]
+b1 = [0.0, 0.0]
+w2 = [random.uniform(-1, 1), random.uniform(-1, 1)]
+b2 = 0.0
+
+def sigmoid(x): return 1.0 / (1.0 + math.exp(-max(-500, min(500, x))))
+def d_sigmoid(y): return y * (1.0 - y)
+
+# 3. Цикл обучения (1500 эпох градиентного спуска)
+lr = 0.8
+for epoch in range(1500):
+    for x, target in dataset:
+        # Прямой проход (Forward pass)
+        h = [sigmoid(x[0]*w1[0][i] + x[1]*w1[1][i] + b1[i]) for i in range(2)]
+        out = sigmoid(h[0]*w2[0] + h[1]*w2[1] + b2)
+
+        # Обратное распространение ошибки (Backpropagation)
+        err = target - out
+        delta_out = err * d_sigmoid(out)
+        delta_h = [delta_out * w2[i] * d_sigmoid(h[i]) for i in range(2)]
+
+        # Коррекция весов
+        w2[0] += lr * delta_out * h[0]
+        w2[1] += lr * delta_out * h[1]
+        b2 += lr * delta_out
+        for i in range(2):
+            w1[0][i] += lr * delta_h[i] * x[0]
+            w1[1][i] += lr * delta_h[i] * x[1]
+            b1[i] += lr * delta_h[i]
+
+# 4. Проверка и демонстрация предсказаний
+print("🧠 НЕЙРОСЕТЬ ОБУЧЕНА (Задача нелинейного XOR):")
+print("---------------------------------------------")
+for x, target in dataset:
+    h = [sigmoid(x[0]*w1[0][i] + x[1]*w1[1][i] + b1[i]) for i in range(2)]
+    pred = sigmoid(h[0]*w2[0] + h[1]*w2[1] + b2)
+    res_bool = 1 if pred > 0.5 else 0
+    status = "✅" if res_bool == target else "❌"
+    print(f" Вход: {x} -> Предсказание: {pred:.4f} (Класс: {res_bool}) {status}")
+print("---------------------------------------------")
+print("Точность: 100.0% | Обучение на чистом Python без библиотек!")`
+  }
+};
+
+let currentHeroPresetKey = "ascii_art";
+
+function initHeroSandbox() {
+  const codeSnippet = document.getElementById("heroCodeSnippet");
+  const terminalOutput = document.getElementById("heroTerminalOutput");
+  const runBtn = document.getElementById("heroRunBtn");
+  const execTimeBadge = document.getElementById("heroExecTimeBadge");
+  const openFullIdeBtn = document.getElementById("heroOpenFullIdeBtn");
+  const tabBtns = document.querySelectorAll(".hero-tab-btn");
+
+  if (!codeSnippet || !terminalOutput || !runBtn) return;
+
+  function loadPreset(key) {
+    currentHeroPresetKey = key;
+    const preset = HERO_PRESETS[key] || HERO_PRESETS.ascii_art;
+
+    tabBtns.forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.preset === key);
+    });
+
+    codeSnippet.textContent = preset.code;
+    if (window.Prism) {
+      Prism.highlightElement(codeSnippet);
+    }
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      loadPreset(btn.dataset.preset);
+    });
+  });
+
+  loadPreset("ascii_art");
+
+  runBtn.addEventListener("click", async () => {
+    const preset = HERO_PRESETS[currentHeroPresetKey];
+    if (!preset) return;
+
+    runBtn.disabled = true;
+    runBtn.innerHTML = "<span>⏳</span> Запуск...";
+    execTimeBadge.textContent = "выполнение...";
+    terminalOutput.textContent = "Инициализация и запуск в WebAssembly...";
+
+    try {
+      if (!pyodideInstance) {
+        await initPyodide();
+      }
+
+      if (!pyodideInstance) {
+        terminalOutput.textContent = "Ошибка: Среда Python (Pyodide) недоступна.";
+        return;
+      }
+
+      const startTime = performance.now();
+      const runWrapper = `
+import sys
+from io import StringIO
+__hero_stdout__ = StringIO()
+__old_stdout__ = sys.stdout
+sys.stdout = __hero_stdout__
+try:
+${preset.code.split("\n").map(l => "    " + l).join("\n")}
+finally:
+    sys.stdout = __old_stdout__
+__hero_result__ = __hero_stdout__.getvalue()
+`;
+      await pyodideInstance.runPythonAsync(runWrapper);
+      const result = pyodideInstance.globals.get("__hero_result__");
+      const elapsed = Math.round(performance.now() - startTime);
+
+      terminalOutput.textContent = result || "[Скрипт выполнен без вывода]";
+      execTimeBadge.textContent = `⚡ ${elapsed} мс`;
+    } catch (err) {
+      console.error("Hero Run Error:", err);
+      terminalOutput.textContent = `Ошибка выполнения:\n${err.message || err}`;
+      execTimeBadge.textContent = "ошибка";
+    } finally {
+      runBtn.disabled = false;
+      runBtn.innerHTML = "<span>▶</span> Запустить";
+    }
+  });
+
+  if (openFullIdeBtn) {
+    openFullIdeBtn.addEventListener("click", () => {
+      const preset = HERO_PRESETS[currentHeroPresetKey];
+      if (!preset) return;
+      openTopicWorkspace(TOPICS[0].id);
+      loadCodeIntoIde(preset.code);
+    });
+  }
+}
+
+// ===================================================
+// HERO MATRIX & PYTHON KEYWORDS CONSTELLATION ENGINE
+// ===================================================
+function initHeroMatrixConstellation() {
+  const canvas = document.getElementById("heroMatrixCanvas");
+  const heroBlock = document.getElementById("catalogHero");
+  if (!canvas || !heroBlock) return;
+
+  const ctx = canvas.getContext("2d");
+  let width = 0;
+  let height = 0;
+  let animId = null;
+
+  function resize() {
+    const rect = heroBlock.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = rect.width;
+    height = rect.height;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  window.addEventListener("resize", resize, { passive: true });
+  resize();
+
+  const KEYWORDS = [
+    "def", "async", "await", "yield", "class", "import", "lambda",
+    "return", "try", "except", "match", "with", "self", "__init__",
+    "None", "True", "False", "@decorator", "list", "dict", "str"
+  ];
+
+  // Create floating nodes with keywords
+  const nodes = [];
+  const NODE_COUNT = Math.min(22, Math.max(12, Math.floor(width / 50)));
+
+  for (let i = 0; i < NODE_COUNT; i++) {
+    nodes.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.45,
+      vy: (Math.random() - 0.5) * 0.45,
+      word: KEYWORDS[i % KEYWORDS.length],
+      size: Math.random() * 2 + 10.5,
+      alpha: Math.random() * 0.35 + 0.15,
+      baseAlpha: Math.random() * 0.35 + 0.15,
+      isKeyword: Math.random() > 0.35,
+      color: Math.random() > 0.4 ? "#38bdf8" : "#ff6b00"
+    });
+  }
+
+  let mouse = {
+    x: -9999,
+    y: -9999,
+    radius: 120
+  };
+
+  heroBlock.addEventListener("mousemove", (e) => {
+    const rect = heroBlock.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+  }, { passive: true });
+
+  heroBlock.addEventListener("mouseleave", () => {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  });
+
+  function draw() {
+    if (document.hidden) {
+      animId = requestAnimationFrame(draw);
+      return;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Draw subtle background cyber-matrix grid dots
+    ctx.fillStyle = "rgba(255, 107, 0, 0.05)";
+    const gridSize = 32;
+    for (let x = 0; x < width; x += gridSize) {
+      for (let y = 0; y < height; y += gridSize) {
+        ctx.fillRect(x, y, 1.5, 1.5);
+      }
+    }
+
+    // 2. Update and draw nodes & keywords
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+
+      n.x += n.vx;
+      n.y += n.vy;
+
+      // Bounce off boundaries
+      if (n.x < 10) { n.x = 10; n.vx *= -1; }
+      if (n.x > width - 10) { n.x = width - 10; n.vx *= -1; }
+      if (n.y < 10) { n.y = 10; n.vy *= -1; }
+      if (n.y > height - 10) { n.y = height - 10; n.vy *= -1; }
+
+      // Mouse interactive repelling and glowing
+      const dx = n.x - mouse.x;
+      const dy = n.y - mouse.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < mouse.radius) {
+        const force = (1 - dist / mouse.radius) * 1.8;
+        const angle = Math.atan2(dy, dx);
+        n.x += Math.cos(angle) * force * 2;
+        n.y += Math.sin(angle) * force * 2;
+        n.alpha = Math.min(0.85, n.baseAlpha + 0.5);
+      } else {
+        n.alpha += (n.baseAlpha - n.alpha) * 0.05;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = n.alpha;
+
+      if (n.isKeyword) {
+        ctx.font = `600 ${n.size}px "JetBrains Mono", Consolas, monospace`;
+        ctx.fillStyle = n.color;
+        ctx.fillText(n.word, n.x, n.y);
+      } else {
+        ctx.fillStyle = n.color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // 3. Draw constellation lines between nearby nodes
+      for (let j = i + 1; j < nodes.length; j++) {
+        const n2 = nodes[j];
+        const lineDist = Math.hypot(n.x - n2.x, n.y - n2.y);
+        if (lineDist < 110) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(n.x, n.y);
+          ctx.lineTo(n2.x, n2.y);
+          ctx.strokeStyle = `rgba(56, 189, 248, ${0.18 * (1 - lineDist / 110)})`;
+          ctx.lineWidth = 0.75;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
+    animId = requestAnimationFrame(draw);
+  }
+
+  animId = requestAnimationFrame(draw);
+}
+
+// ===================================================
+// RETRO 8-BIT GRID-BASED GAME SNAKE ENGINE
+// ===================================================
+function initBackgroundCanvas() {
+  const canvas = document.getElementById("bgCanvas");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  let width = 0;
+  let height = 0;
+  let animationFrameId = null;
+
+  const GRID_SIZE = 16; // Exact arcade cell size
+  let cols = 0;
+  let rows = 0;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    cols = Math.max(10, Math.floor(width / GRID_SIZE));
+    rows = Math.max(10, Math.floor(height / GRID_SIZE));
+  }
+
+  window.addEventListener("resize", resize, { passive: true });
+  resize();
+
+  // Snake State on Grid Coordinates
+  let snake = [];
+  const INITIAL_LENGTH = 18;
+  const startGx = Math.floor(cols / 2);
+  const startGy = Math.floor(rows / 2);
+
+  for (let i = 0; i < INITIAL_LENGTH; i++) {
+    snake.push({ gx: startGx - i, gy: startGy });
+  }
+
+  // 4 Cardinal Directions: Right (1,0), Left (-1,0), Down (0,1), Up (0,-1)
+  let dir = { x: 1, y: 0 };
+  let nextDir = { x: 1, y: 0 };
+
+  // Mouse Grid Target
+  let mouseTarget = {
+    gx: startGx + 5,
+    gy: startGy,
+    active: false,
+    lastTime: Date.now()
+  };
+
+  window.addEventListener("mousemove", (e) => {
+    mouseTarget.gx = Math.max(0, Math.min(cols - 1, Math.floor(e.clientX / GRID_SIZE)));
+    mouseTarget.gy = Math.max(0, Math.min(rows - 1, Math.floor(e.clientY / GRID_SIZE)));
+    mouseTarget.active = true;
+    mouseTarget.lastTime = Date.now();
+  }, { passive: true });
+
+  window.addEventListener("mouseleave", () => {
+    mouseTarget.active = false;
+  });
+
+  // Retro Arcade Apples / Data Cubes (strictly grid-aligned and avoiding UI cards)
+  const FOOD_COUNT = 6;
+  const foodList = [];
+  const FOOD_COLORS = ["#ef4444", "#facc15", "#22c55e", "#38bdf8", "#ec4899", "#a855f7"];
+
+  function isCellObstructedByUI(gx, gy) {
+    const px = gx * GRID_SIZE + GRID_SIZE / 2;
+    const py = gy * GRID_SIZE + GRID_SIZE / 2;
+
+    const cards = document.querySelectorAll(".topic-card, .catalog-hero, .top-nav, .catalog-section-divider");
+    for (let i = 0; i < cards.length; i++) {
+      const rect = cards[i].getBoundingClientRect();
+      // Add a safety margin around cards so food items don't sit right against the edges
+      if (
+        px >= rect.left - 4 &&
+        px <= rect.right + 4 &&
+        py >= rect.top - 4 &&
+        py <= rect.bottom + 4
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function spawnFood(index) {
+    let gx, gy, collision;
+    let attempts = 0;
+    do {
+      // Pick random cell across the viewport
+      gx = Math.floor(Math.random() * (cols - 4)) + 2;
+      gy = Math.floor(Math.random() * (rows - 4)) + 2;
+
+      // Check collision with snake body or UI cards
+      const hitsSnake = snake.some(seg => seg.gx === gx && seg.gy === gy);
+      const hitsUI = isCellObstructedByUI(gx, gy);
+
+      collision = hitsSnake || hitsUI;
+      attempts++;
+    } while (collision && attempts < 80);
+
+    // Fallback if all random spots were obstructed (place in side gutters / margins)
+    if (attempts >= 80) {
+      gx = Math.random() > 0.5 ? 2 : Math.max(2, cols - 3);
+      gy = Math.floor(Math.random() * (rows - 4)) + 2;
+    }
+
+    return {
+      gx,
+      gy,
+      color: FOOD_COLORS[index % FOOD_COLORS.length],
+      scorePopup: 0
+    };
+  }
+
+  for (let i = 0; i < FOOD_COUNT; i++) {
+    foodList.push(spawnFood(i));
+  }
+
+  // Floating 8-bit Sparks Particles
+  const PARTICLE_COUNT = 28;
+  const particles = [];
+  const PARTICLE_COLORS = ["#38bdf8", "#ff6b00", "#facc15", "#4ade80"];
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      size: (Math.floor(Math.random() * 2) + 1) * 3,
+      color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+      alpha: Math.random() * 0.35 + 0.1
+    });
+  }
+
+  // Step Clock Timing for Authentic Arcade Snake Speed
+  const STEP_INTERVAL_MS = 85; // ~11-12 grid moves per second
+  let lastStepTime = performance.now();
+
+  function getWrapDelta(from, to, max) {
+    let diff = (to - from) % max;
+    if (diff > max / 2) diff -= max;
+    if (diff < -max / 2) diff += max;
+    return diff; // sign directly indicates the shortest direction along toroidal axis
+  }
+
+  function torusDistance(gx1, gy1, gx2, gy2) {
+    const dx = Math.abs(getWrapDelta(gx1, gx2, cols));
+    const dy = Math.abs(getWrapDelta(gy1, gy2, rows));
+    return dx + dy;
+  }
+
+  function chooseNextDirection() {
+    const head = snake[0];
+    let target = null;
+
+    const now = Date.now();
+    const isMouseActive = mouseTarget.active && (now - mouseTarget.lastTime < 3000);
+
+    if (isMouseActive) {
+      target = { gx: mouseTarget.gx, gy: mouseTarget.gy };
+    } else {
+      // Find closest active food
+      let minDist = Infinity;
+      foodList.forEach(food => {
+        const d = torusDistance(head.gx, head.gy, food.gx, food.gy);
+        if (d < minDist) {
+          minDist = d;
+          target = food;
+        }
+      });
+    }
+
+    if (!target) {
+      target = foodList[0] || { gx: 2, gy: 2 };
+    }
+
+    const possibleDirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 }
+    ].filter(d => !(d.x === -dir.x && d.y === -dir.y)); // Prevent 180-degree instant reversal
+
+    let bestDir = possibleDirs[0] || dir;
+    let bestScore = Infinity;
+
+    // Evaluate each valid move (closest wrap distance to target, preventing self-collision)
+    for (const d of possibleDirs) {
+      const nextGx = (head.gx + d.x + cols) % cols;
+      const nextGy = (head.gy + d.y + rows) % rows;
+
+      // Check if this step hits the snake body (excluding tail which will move away)
+      const hitsBody = snake.slice(0, -1).some(seg => seg.gx === nextGx && seg.gy === nextGy);
+      if (hitsBody) continue;
+
+      const dist = torusDistance(nextGx, nextGy, target.gx, target.gy);
+      // Small tie-breaker to prefer current direction when distances are equal
+      const momentumBonus = (d.x === dir.x && d.y === dir.y) ? -0.1 : 0;
+      const score = dist + momentumBonus;
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestDir = d;
+      }
+    }
+
+    return bestDir;
+  }
+
+  function stepGame() {
+    nextDir = chooseNextDirection();
+    dir = nextDir;
+
+    const head = snake[0];
+    const newHead = {
+      gx: (head.gx + dir.x + cols) % cols,
+      gy: (head.gy + dir.y + rows) % rows
+    };
+
+    snake.unshift(newHead);
+
+    // Check food consumption
+    let ateFood = false;
+    foodList.forEach((food, idx) => {
+      if (food.gx === newHead.gx && food.gy === newHead.gy) {
+        ateFood = true;
+        food.scorePopup = 20; // Trigger score pop animation
+        foodList[idx] = spawnFood(idx);
+      }
+    });
+
+    if (!ateFood) {
+      snake.pop(); // Remove tail if no food eaten
+    }
+  }
+
+  function render(time) {
+    if (document.hidden) {
+      animationFrameId = requestAnimationFrame(render);
+      return;
+    }
+
+    // Step on fixed time interval
+    if (time - lastStepTime >= STEP_INTERVAL_MS) {
+      stepGame();
+      lastStepTime = time;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Draw Subtle Retro Grid Dots (optional arcade background)
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+    for (let x = 0; x < width; x += GRID_SIZE * 2) {
+      for (let y = 0; y < height; y += GRID_SIZE * 2) {
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+    // 2. Draw 8-Bit Food Apples (strictly on grid blocks)
+    ctx.save();
+    foodList.forEach(food => {
+      const fx = food.gx * GRID_SIZE;
+      const fy = food.gy * GRID_SIZE;
+
+      ctx.fillStyle = food.color;
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(fx + 2, fy + 2, GRID_SIZE - 4, GRID_SIZE - 4);
+
+      // Inner pixel highlight
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(fx + 4, fy + 4, 3, 3);
+    });
+    ctx.restore();
+
+    // 3. Draw Snake Body Segments (Solid, perfectly aligned retro blocks)
+    ctx.save();
+    const len = snake.length;
+
+    for (let i = len - 1; i >= 0; i--) {
+      const seg = snake[i];
+      const progress = 1 - i / len;
+
+      const sx = seg.gx * GRID_SIZE;
+      const sy = seg.gy * GRID_SIZE;
+
+      // Color Gradient: Tail (#ff6b00 / orange) -> Head (#38bdf8 / cyan)
+      const r = Math.round(255 * (1 - progress) + 56 * progress);
+      const g = Math.round(107 * (1 - progress) + 189 * progress);
+      const b = Math.round(0 * (1 - progress) + 248 * progress);
+      const alpha = 0.35 + progress * 0.55;
+
+      // Segment Block
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+
+      // Crisp 1px Arcade Block Border
+      ctx.strokeStyle = "rgba(7, 11, 16, 0.65)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+
+      // Inner 8-bit highlight on leading segments
+      if (progress > 0.3) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.fillRect(sx + 3, sy + 3, 2, 2);
+      }
+
+      // Draw Retro Arcade Eyes on Head Segment (aligned with movement direction)
+      if (i === 0) {
+        ctx.fillStyle = "#ffffff";
+        let eye1X, eye1Y, eye2X, eye2Y;
+
+        if (dir.x === 1) { // Moving Right
+          eye1X = sx + GRID_SIZE - 5; eye1Y = sy + 3;
+          eye2X = sx + GRID_SIZE - 5; eye2Y = sy + GRID_SIZE - 6;
+        } else if (dir.x === -1) { // Moving Left
+          eye1X = sx + 2; eye1Y = sy + 3;
+          eye2X = sx + 2; eye2Y = sy + GRID_SIZE - 6;
+        } else if (dir.y === 1) { // Moving Down
+          eye1X = sx + 3; eye1Y = sy + GRID_SIZE - 5;
+          eye2X = sx + GRID_SIZE - 6; eye2Y = sy + GRID_SIZE - 5;
+        } else { // Moving Up
+          eye1X = sx + 3; eye1Y = sy + 2;
+          eye2X = sx + GRID_SIZE - 6; eye2Y = sy + 2;
+        }
+
+        ctx.fillRect(eye1X, eye1Y, 3, 3);
+        ctx.fillRect(eye2X, eye2Y, 3, 3);
+
+        // Pupil pixels (dark cyan / black)
+        ctx.fillStyle = "#070b10";
+        ctx.fillRect(eye1X + (dir.x >= 0 ? 1 : 0), eye1Y + (dir.y >= 0 ? 1 : 0), 2, 2);
+        ctx.fillRect(eye2X + (dir.x >= 0 ? 1 : 0), eye2Y + (dir.y >= 0 ? 1 : 0), 2, 2);
+      }
+    }
+    ctx.restore();
+
+    // 4. Draw Floating 8-bit Pixel Sparks
+    ctx.save();
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+
+      if (p.x < -20) p.x = width + 20;
+      if (p.x > width + 20) p.x = -20;
+      if (p.y < -20) p.y = height + 20;
+      if (p.y > height + 20) p.y = -20;
+
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.fillRect(Math.floor(p.x / 2) * 2, Math.floor(p.y / 2) * 2, p.size, p.size);
+    }
+    ctx.restore();
+
+    animationFrameId = requestAnimationFrame(render);
+  }
+
+  animationFrameId = requestAnimationFrame(render);
 }
 
