@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python Интерактивный учебник & Песочница</title>
+
+  <!-- Monaco Editor Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+  <!-- Prism.js CSS Theme (Left Snippets Syntax Highlighting) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Prism.js Syntax Highlighting Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+  <!-- Pyodide WebAssembly Python Engine -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+</head>
+<body>
+
+  <!-- Top App Navigation -->
+  <header class="top-nav">
+    <div class="nav-left">
+      <a href="#" id="brandHomeLink" class="brand-link" title="На главную (Каталог тем)">
+        <div class="brand-badge">PY</div>
+        <div class="brand-title">Python Interactive Lab</div>
+      </a>
+      <div class="nav-progress-box" title="Ваш общий прогресс изучения">
+        <div class="nav-progress-bar-bg">
+          <div id="catalogProgressFill" class="nav-progress-bar-fill"></div>
+        </div>
+        <span id="catalogProgressText" class="nav-progress-text">Прогресс: 0 / 27 (0%)</span>
+      </div>
+    </div>
+
+    <div class="nav-center">
+      <div id="globalSearchBtn" class="nav-search-wrapper" title="Поиск по темам, методам и коду">
+        <span class="nav-search-icon">🔍</span>
+        <input type="text" id="navSearchTrigger" class="search-input nav-search-input" placeholder="Поиск по темам, методам и коду..." readonly>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <button id="hotkeysModalBtn" class="nav-btn hotkeys-btn" title="Список горячих клавиш">
+        <span>⌨️</span> <span class="hotkeys-btn-label">Горячие клавиши</span>
+      </button>
+      <div class="engine-status" title="Статус среды Python (Pyodide WebAssembly)">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">Python 3.12</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- VIEW 1: Catalog of Topics (Cheat Sheet View) -->
+  <main id="catalogView">
+    <div class="catalog-header">
+      <div class="catalog-header-left">
+        <h1>Справочник и интерактивные уроки</h1>
+        <p>Выберите интересующую тему для изучения теории и запуска кода в полноэкранной песочнице</p>
+      </div>
+    </div>
+
+    <div id="topicsGrid" class="topics-grid">
+      <!-- Injected dynamically by app.js -->
+    </div>
+  </main>
+
+  <!-- VIEW 2: Full-Screen Split Workspace (Left: Theory/Snippets, Right: CodeMirror IDE) -->
+  <div id="workspaceView">
+
+    <!-- Column 1: Topics Sidebar Menu -->
+    <nav class="workspace-topics-sidebar">
+      <div class="sidebar-title">Содержание</div>
+      <div id="sidebarTopicsList" class="sidebar-topics-list">
+        <!-- Injected dynamically -->
+      </div>
+    </nav>
+
+    <!-- Column 2: Theory & Interactive Examples Pane -->
+    <section class="workspace-content-pane" id="workspaceContentPane">
+      <div class="topic-header-block">
+        <div id="topicCategoryText" class="topic-cat">Основы</div>
+        <h2 id="topicTitleText">Основы Python</h2>
+      </div>
+
+      <!-- Theory Card -->
+      <article class="theory-card" id="theoryBlock">
+        <!-- Injected dynamically -->
+      </article>
+
+      <!-- Interactive Examples List with Jupyter-like inline runners -->
+      <div>
+        <h3 style="font-size: 15px; color: var(--primary); margin-bottom: 12px;">💡 Примеры кода и интерактивный запуск:</h3>
+        <div id="snippetsList" style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Injected dynamically with Prism.js syntax highlighting -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 3: Full-featured CodeMirror IDE & Terminal -->
+    <section class="workspace-ide-pane">
+      <div class="ide-header">
+        <div class="ide-tab">
+          <span>🐍</span> main.py
+        </div>
+        <div class="ide-actions">
+          <div id="ideSaveIndicator" class="ide-save-indicator" title="Код сохраняется в браузере автоматически">
+            <span>💾</span> <span>Сохранено</span>
+          </div>
+          <button id="formatCodeBtn" class="ide-format-btn" title="Форматировать код по стандарту PEP 8">
+            <span>🪄</span> Форматировать
+          </button>
+          <button id="stepDebugBtn" class="ide-step-btn" disabled title="Пошаговая визуализация выполнения">
+            <span>👣</span> По шагам
+          </button>
+          <button id="resetCodeBtn" class="ide-reset-btn" title="Вернуть исходный пример">
+            <span>🔄</span> Сбросить
+          </button>
+          <button id="runIdeBtn" class="ide-run-btn" disabled>
+            <span>▶</span> Запустить
+          </button>
+        </div>
+      </div>
+
+      <!-- Monaco Editor Mount Area -->
+      <div class="ide-editor-container" id="ideEditorContainer">
+        <div id="monacoEditorContainer" style="width: 100%; height: 100%;"></div>
+      </div>
+
+      <!-- Terminal / Debugger Output Pane -->
+      <div class="ide-terminal-pane" id="ideTerminalPane">
+        <div class="terminal-top" id="terminalResizer" title="Потяните вверх или вниз для изменения размера">
+          <div class="terminal-title-container">
+            <span class="terminal-drag-handle">⠿</span>
+            <span id="terminalTitleText">ТЕРМИНАЛ ВЫВОДА (STDOUT / STDERR)</span>
+          </div>
+
+          <!-- Step-by-Step Debugger Controls (Visible in Debug Mode) -->
+          <div id="debugControls" class="debug-controls" style="display: none;">
+            <button id="debugFirstBtn" class="debug-nav-btn" title="В начало (Home)">⏮</button>
+            <button id="debugPrevBtn" class="debug-nav-btn" title="Шаг назад (←)">◀ Назад</button>
+            <span id="debugStepInfo" class="debug-step-badge">Шаг 1 из 1</span>
+            <button id="debugNextBtn" class="debug-nav-btn primary" title="Шаг вперёд (→ / F10)">Вперёд ▶</button>
+            <button id="debugLastBtn" class="debug-nav-btn" title="В конец (End)">⏭</button>
+            <button id="debugExitBtn" class="debug-nav-btn exit" title="Выйти из режима отладки (Esc)">⏹ Завершить</button>
+          </div>
+
+          <button id="clearTermBtn" class="nav-btn" style="padding: 2px 8px; font-size: 11px;">Очистить</button>
+        </div>
+
+        <!-- Mode 1: Standard Terminal Output -->
+        <div id="terminalBody" class="terminal-body empty">
+          Нажмите «Запустить (Ctrl+Enter)» или выберите пример слева для выполнения кода.
+        </div>
+
+        <!-- Mode 2: Step-by-Step Visualizer View -->
+        <div id="debugViewBody" class="debug-view-body" style="display: none;">
+          <!-- Top Step Status Banner -->
+          <div id="debugEventBanner" class="debug-event-banner">
+            <span id="debugEventIcon">📍</span>
+            <span id="debugEventText">Выполнение строки 1</span>
+          </div>
+
+          <div class="debug-panels-grid">
+            <!-- Left Panel: Variables & Memory Inspector -->
+            <div class="debug-vars-panel">
+              <div class="debug-panel-title">
+                <span>📦 ПЕРЕМЕННЫЕ В ПАМЯТИ</span>
+                <span id="debugScopeBadge" class="debug-scope-badge">Глобальная область</span>
+              </div>
+              <div id="debugVarsContainer" class="debug-vars-container">
+                <!-- Injected dynamically -->
+              </div>
+            </div>
+
+            <!-- Right Panel: Step Console Output -->
+            <div class="debug-output-panel">
+              <div class="debug-panel-title">
+                <span>🖥️ ВЫВОД В КОНСОЛЬ (К ЭТОМУ ШАГУ)</span>
+              </div>
+              <pre id="debugOutputText" class="debug-step-stdout"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Modal: Keyboard Shortcuts -->
+  <div id="hotkeysModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>⌨️</span> Сокращения клавиш (Горячие клавиши)
+        </div>
+        <button id="closeHotkeysModalBtn" class="modal-close-btn" title="Закрыть (Esc)">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="shortcuts-group">
+          <div class="shortcuts-group-title">Запуск и отладка кода</div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Запустить код в IDE</span>
+            <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Пошаговое выполнение (Дебаггер)</span>
+            <div class="shortcut-keys"><kbd>F10</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Шаг вперёд / Шаг назад</span>
+            <div class="shortcut-keys"><kbd>→</kbd> / <kbd>←</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Завершить пошаговую отладку</span>
+            <div class="shortcut-keys"><kbd>Esc</kbd></div>
+          </div>
+        </div>
+
+        <div class="shortcuts-group">
+          <div class="shortcuts-group-title">Редактор и форматирование</div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Форматировать код по стандарту PEP 8</span>
+            <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd> <span class="shortcut-or">или</span> <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Вставка отступа (4 пробела)</span>
+            <div class="shortcut-keys"><kbd>Tab</kbd></div>
+          </div>
+        </div>
+
+        <div class="shortcuts-group">
+          <div class="shortcuts-group-title">Поиск и навигация</div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Умный поиск методов и кода (Command Palette)</span>
+            <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>K</kbd> <span class="shortcut-or">или</span> <kbd>/</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Вернуться в каталог всех тем</span>
+            <div class="shortcut-keys"><kbd>Esc</kbd></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Command Palette / Smart Method Search -->
+  <div id="searchPaletteModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card search-palette-card">
+      <div class="search-palette-input-wrap">
+        <span class="search-palette-icon">🔍</span>
+        <input type="text" id="paletteSearchInput" class="search-palette-input" placeholder="Поиск по методам (.append, sort), функциям, коду..." autocomplete="off">
+        <kbd class="search-palette-esc">Esc</kbd>
+      </div>
+      <div id="paletteResultsList" class="search-palette-results">
+        <!-- Injected dynamically -->
+      </div>
+      <div class="search-palette-footer">
+        <span><kbd>↑</kbd> <kbd>↓</kbd> навигация</span>
+        <span><kbd>Enter</kbd> перейти к коду</span>
+        <span><kbd>Esc</kbd> закрыть</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Python input() Custom Dialog -->
+  <div id="customInputModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card custom-input-card">
+      <div class="custom-input-header">
+        <span class="custom-input-icon">⌨️</span>
+        <div class="custom-input-header-text">
+          <span class="custom-input-tag">Python input()</span>
+          <h3 id="inputModalPromptText" class="custom-input-title">Введите значение:</h3>
+        </div>
+      </div>
+      <form id="customInputForm" class="custom-input-body">
+        <div class="custom-input-field-wrap">
+          <input type="text" id="customInputField" class="custom-input-field" placeholder="Ваш ответ..." autocomplete="off">
+        </div>
+        <div class="custom-input-actions">
+          <button type="button" id="customInputCancelBtn" class="custom-input-btn btn-cancel">Отмена (Esc)</button>
+          <button type="submit" id="customInputSubmitBtn" class="custom-input-btn btn-submit">Продолжить ↵</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- App Logic Scripts -->
+  <script src="topics.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
