@@ -42,7 +42,22 @@
   <header class="top-nav">
     <div class="nav-left">
       <a href="#" id="brandHomeLink" class="brand-link" title="На главную (Каталог тем)">
-        <div class="brand-badge">PY</div>
+        <div class="brand-badge">
+          <svg class="brand-python-icon" viewBox="0 0 256 255" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="pyBlueGrad" x1="12.959%" y1="12.039%" x2="79.639%" y2="78.201%">
+                <stop offset="0%" stop-color="#387eb8"/>
+                <stop offset="100%" stop-color="#366994"/>
+              </linearGradient>
+              <linearGradient id="pyYellowGrad" x1="19.128%" y1="20.579%" x2="90.742%" y2="88.429%">
+                <stop offset="0%" stop-color="#ffe052"/>
+                <stop offset="100%" stop-color="#ffc331"/>
+              </linearGradient>
+            </defs>
+            <path d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631c-53.948 0-50.627 23.364-50.627 50.627 0 27.262 13.972 50.626 50.627 50.626h18.232v-24.975c0-30.825 25.438-30.825 25.438-30.825h59.083c27.263 0 27.263-25.438 27.263-25.438V28.187C171.647 28.187 175.77.072 126.916.072zm-34.114 19.588a11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13 11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.13z" fill="url(#pyBlueGrad)"/>
+            <path d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441c53.949 0 50.628-23.365 50.628-50.628 0-27.262-13.972-50.626-50.628-50.626h-18.232v24.975c0 30.825-25.438 30.825-25.438 30.825H111.32c-27.263 0-27.263 25.438-27.263 25.438v48.434c0 0-4.123 28.115 44.7 28.115zm34.114-19.586a11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.13 11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13z" fill="url(#pyYellowGrad)"/>
+          </svg>
+        </div>
         <div class="brand-title">Python Interactive Lab</div>
       </a>
       <div class="nav-progress-box" title="Ваш общий прогресс изучения">
@@ -56,7 +71,7 @@
     <div class="nav-center">
       <div id="globalSearchBtn" class="nav-search-wrapper" title="Поиск по темам, методам и коду">
         <span class="nav-search-icon">🔍</span>
-        <input type="text" id="navSearchTrigger" class="search-input nav-search-input" placeholder="Поиск по темам, методам и коду..." readonly>
+        <input type="text" id="searchInput" class="search-input nav-search-input" placeholder="Поиск по темам, методам и коду...">
       </div>
     </div>
 
@@ -64,7 +79,7 @@
       <button id="hotkeysModalBtn" class="nav-btn hotkeys-btn" title="Список горячих клавиш">
         <span>⌨️</span> <span class="hotkeys-btn-label">Горячие клавиши</span>
       </button>
-      <div class="engine-status" title="Статус среды Python (Pyodide WebAssembly)">
+      <div class="engine-status" title="Статус интерактивной среды Python">
         <span id="statusDot" class="status-dot"></span>
         <span id="statusText">Python 3.12</span>
       </div>
@@ -78,7 +93,7 @@
       <canvas id="heroMatrixCanvas" class="hero-matrix-canvas"></canvas>
 
       <div class="hero-intro">
-        <div class="hero-badge">⚡ WebAssembly Python 3.12</div>
+        <div class="hero-badge">⚡ ИНТЕРАКТИВНЫЙ PYTHON 3.12</div>
         <h1 class="hero-title">Интерактивная Лаборатория & Справочник Python</h1>
         <p class="hero-desc">
           Изучайте язык через живую практику прямо в браузере. Выполняйте код в реальном времени,
@@ -272,7 +287,7 @@
     <div class="modal-card">
       <div class="modal-header">
         <div class="modal-title">
-          <span>⌨️</span> Сокращения клавиш (Горячие клавиши)
+          <span>⌨️</span> Горячие клавиши
         </div>
         <button id="closeHotkeysModalBtn" class="modal-close-btn" title="Закрыть (Esc)">✕</button>
       </div>
@@ -302,7 +317,7 @@
           <div class="shortcuts-group-title">Редактор и форматирование</div>
           <div class="shortcut-row">
             <span class="shortcut-desc">Форматировать код по стандарту PEP 8</span>
-            <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd> <span class="shortcut-or">или</span> <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd></div>
+            <div class="shortcut-keys"><kbd>Shift</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd></div>
           </div>
           <div class="shortcut-row">
             <span class="shortcut-desc">Вставка отступа (4 пробела)</span>
@@ -319,6 +334,22 @@
           <div class="shortcut-row">
             <span class="shortcut-desc">Вернуться в каталог всех тем</span>
             <div class="shortcut-keys"><kbd>Esc</kbd></div>
+          </div>
+        </div>
+
+        <div class="shortcuts-group">
+          <div class="shortcuts-group-title">Интерактивная змейка (Главный экран)</div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Турбо-ускорение</span>
+            <div class="shortcut-keys"><kbd>ПКМ</kbd> (зажать)</div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Сбросить яблочки</span>
+            <div class="shortcut-keys"><kbd>ЛКМ</kbd></div>
+          </div>
+          <div class="shortcut-row">
+            <span class="shortcut-desc">Ручное управление направлением</span>
+            <div class="shortcut-keys"><kbd>Движение мыши</kbd></div>
           </div>
         </div>
       </div>

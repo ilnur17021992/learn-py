@@ -234,12 +234,12 @@ function updateProgressUI() {
 
 // Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
+  renderCatalog();
+  renderSidebar();
   initBackgroundCanvas();
   initHeroSandbox();
   initHeroMatrixConstellation();
   initMonacoEditor();
-  renderCatalog();
-  renderSidebar();
   setupEventListeners();
   initSearchPalette();
   initTerminalResizer();
@@ -844,11 +844,11 @@ async function runIdeCode() {
 async function initPyodide() {
   if (pyodideInstance || isPyodideLoading) return;
   isPyodideLoading = true;
-  updateStatus(false, "Загрузка Python 3.12 (Pyodide)...");
+  updateStatus(false, "Загрузка Python 3.12...");
 
   try {
     if (typeof loadPyodide === "undefined") {
-      throw new Error("Pyodide CDN недоступен");
+      throw new Error("Среда Python временно недоступна");
     }
 
     pyodideInstance = await loadPyodide();
@@ -858,17 +858,17 @@ async function initPyodide() {
         return input !== null ? input + "\n" : null;
       }
     });
-    updateStatus(false, "Загрузка micropip и autopep8...");
+    updateStatus(false, "Подготовка интерактивной среды...");
     await pyodideInstance.loadPackage("micropip");
     const micropip = pyodideInstance.pyimport("micropip");
     await micropip.install("autopep8");
 
-    updateStatus(true, "Python 3.12 (Pyodide) готов");
+    updateStatus(true, "Python 3.12 готов");
     runIdeBtn.disabled = false;
     stepDebugBtn.disabled = false;
   } catch (err) {
-    console.error("Ошибка загрузки Pyodide:", err);
-    updateStatus(false, "Ошибка загрузки Pyodide");
+    console.error("Ошибка загрузки среды:", err);
+    updateStatus(false, "Ошибка запуска Python");
   } finally {
     isPyodideLoading = false;
   }
@@ -1855,7 +1855,7 @@ for row in logo:
     print(row)
 
 print("🐍 Python Interactive Lab Engine")
-print(f"Версия платформы: {sys.version.split()[0]} (WebAssembly)")
+print(f"Версия языка: Python {sys.version.split()[0]}")
 print(f"Константа π = {math.pi:.6f}, e = {math.e:.6f}")`
   },
   neural_net: {
@@ -1957,7 +1957,7 @@ function initHeroSandbox() {
     runBtn.disabled = true;
     runBtn.innerHTML = "<span>⏳</span> Запуск...";
     execTimeBadge.textContent = "выполнение...";
-    terminalOutput.textContent = "Инициализация и запуск в WebAssembly...";
+    terminalOutput.textContent = "Выполнение скрипта в песочнице...";
 
     try {
       if (!pyodideInstance) {
@@ -1965,7 +1965,7 @@ function initHeroSandbox() {
       }
 
       if (!pyodideInstance) {
-        terminalOutput.textContent = "Ошибка: Среда Python (Pyodide) недоступна.";
+        terminalOutput.textContent = "Ошибка: Интерактивная среда Python недоступна.";
         return;
       }
 
@@ -2077,7 +2077,7 @@ function initHeroMatrixConstellation() {
   });
 
   function draw() {
-    if (document.hidden) {
+    if (document.hidden || (workspaceView && workspaceView.classList.contains("active"))) {
       animId = requestAnimationFrame(draw);
       return;
     }
@@ -2193,22 +2193,15 @@ function initBackgroundCanvas() {
   // Snake State on Grid Coordinates
   let snake = [];
   const INITIAL_LENGTH = 18;
-  const startGx = Math.floor(cols / 2);
-  const startGy = Math.floor(rows / 2);
-
-  for (let i = 0; i < INITIAL_LENGTH; i++) {
-    snake.push({ gx: startGx - i, gy: startGy });
-  }
-
-  // 4 Cardinal Directions: Right (1,0), Left (-1,0), Down (0,1), Up (0,-1)
   let dir = { x: 1, y: 0 };
   let nextDir = { x: 1, y: 0 };
 
-  // Mouse Grid Target
+  // Mouse Grid Target & Turbo State
   let mouseTarget = {
-    gx: startGx + 5,
-    gy: startGy,
+    gx: 5,
+    gy: 5,
     active: false,
+    isRightDown: false,
     lastTime: Date.now()
   };
 
@@ -2217,10 +2210,31 @@ function initBackgroundCanvas() {
     mouseTarget.gy = Math.max(0, Math.min(rows - 1, Math.floor(e.clientY / GRID_SIZE)));
     mouseTarget.active = true;
     mouseTarget.lastTime = Date.now();
+    if (e.buttons !== undefined) {
+      mouseTarget.isRightDown = (e.buttons & 2) === 2;
+    }
   }, { passive: true });
+
+  window.addEventListener("mousedown", (e) => {
+    if (e.button === 2) {
+      // Right click activates Turbo Sprint across page (except inside code editor/inputs)
+      if (!e.target.closest("#monacoEditorContainer, input, textarea")) {
+        mouseTarget.isRightDown = true;
+        mouseTarget.active = true;
+        mouseTarget.lastTime = Date.now();
+      }
+    }
+  });
+
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 2 || (e.buttons !== undefined && (e.buttons & 2) === 0)) {
+      mouseTarget.isRightDown = false;
+    }
+  });
 
   window.addEventListener("mouseleave", () => {
     mouseTarget.active = false;
+    mouseTarget.isRightDown = false;
   });
 
   // Retro Arcade Apples / Data Cubes (strictly grid-aligned and avoiding UI cards)
@@ -2228,24 +2242,48 @@ function initBackgroundCanvas() {
   const foodList = [];
   const FOOD_COLORS = ["#ef4444", "#facc15", "#22c55e", "#38bdf8", "#ec4899", "#a855f7"];
 
-  function isCellObstructedByUI(gx, gy) {
-    const px = gx * GRID_SIZE + GRID_SIZE / 2;
-    const py = gy * GRID_SIZE + GRID_SIZE / 2;
+  // Fast UI Obstacles Grid Cache (O(1) lookups, Zero DOM Thrashing)
+  let uiBlockGrid = new Uint8Array(cols * rows);
+  let lastUiCacheTime = 0;
 
-    const cards = document.querySelectorAll(".topic-card, .catalog-hero, .top-nav, .catalog-section-divider");
+  function updateUiObstacleCache(force = false) {
+    const now = performance.now();
+    if (!force && now - lastUiCacheTime < 350) return; // Refresh at most ~3 times per second
+    lastUiCacheTime = now;
+
+    uiBlockGrid.fill(0);
+    const cards = document.querySelectorAll(".topic-card, .catalog-hero, .top-nav, .catalog-section-divider, .modal-card");
+
     for (let i = 0; i < cards.length; i++) {
-      const rect = cards[i].getBoundingClientRect();
-      // Add a safety margin around cards so food items don't sit right against the edges
-      if (
-        px >= rect.left - 4 &&
-        px <= rect.right + 4 &&
-        py >= rect.top - 4 &&
-        py <= rect.bottom + 4
-      ) {
-        return true;
+      const el = cards[i];
+      if (el.closest('.modal-backdrop') && el.closest('.modal-backdrop').style.display === 'none') {
+        continue;
+      }
+      const rect = el.getBoundingClientRect();
+      const minGx = Math.max(0, Math.floor((rect.left - 4) / GRID_SIZE));
+      const maxGx = Math.min(cols - 1, Math.floor((rect.right + 4) / GRID_SIZE));
+      const minGy = Math.max(0, Math.floor((rect.top - 4) / GRID_SIZE));
+      const maxGy = Math.min(rows - 1, Math.floor((rect.bottom + 4) / GRID_SIZE));
+
+      for (let gy = minGy; gy <= maxGy; gy++) {
+        const rowOffset = gy * cols;
+        for (let gx = minGx; gx <= maxGx; gx++) {
+          uiBlockGrid[rowOffset + gx] = 1;
+        }
       }
     }
-    return false;
+  }
+
+  window.addEventListener("scroll", () => updateUiObstacleCache(true), { passive: true });
+  window.addEventListener("resize", () => {
+    uiBlockGrid = new Uint8Array(cols * rows);
+    updateUiObstacleCache(true);
+  }, { passive: true });
+  updateUiObstacleCache(true);
+
+  function isCellObstructedByUI(gx, gy) {
+    if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return true;
+    return uiBlockGrid[gy * cols + gx] === 1;
   }
 
   function spawnFood(index) {
@@ -2282,32 +2320,235 @@ function initBackgroundCanvas() {
     foodList.push(spawnFood(i));
   }
 
-  // Floating 8-bit Sparks Particles
-  const PARTICLE_COUNT = 28;
-  const particles = [];
-  const PARTICLE_COLORS = ["#38bdf8", "#ff6b00", "#facc15", "#4ade80"];
+  // Interactive Falling Apples Engine (Right-Click Spawn)
+  const fallingApples = [];
+  const landingSparks = [];
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    particles.push({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5,
-      size: (Math.floor(Math.random() * 2) + 1) * 3,
-      color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
-      alpha: Math.random() * 0.35 + 0.1
+  function dropNewApple(preferredGx = null) {
+    // 1. Gather all valid unobstructed candidate grid cells across the screen (especially side gutters)
+    const validCells = [];
+
+    // Prioritize side gutters (left & right free areas) and open corridors
+    for (let gx = 1; gx < cols - 1; gx++) {
+      // If user clicked a specific side/column, give priority to nearby columns
+      if (preferredGx !== null && Math.abs(gx - preferredGx) > cols * 0.45) continue;
+
+      for (let gy = 2; gy < rows - 2; gy++) {
+        if (!isCellObstructedByUI(gx, gy)) {
+          const alreadyHasFood = foodList.some(f => f.gx === gx && f.gy === gy);
+          const alreadyFallingThere = fallingApples.some(a => a.gx === gx && a.targetGy === gy);
+          if (!alreadyHasFood && !alreadyFallingThere) {
+            validCells.push({ gx, gy });
+          }
+        }
+      }
+    }
+
+    // Fallback across whole grid if subset was empty
+    if (validCells.length === 0) {
+      for (let gx = 1; gx < cols - 1; gx++) {
+        for (let gy = 2; gy < rows - 2; gy++) {
+          if (!isCellObstructedByUI(gx, gy)) {
+            validCells.push({ gx, gy });
+          }
+        }
+      }
+    }
+
+    if (validCells.length === 0) return;
+
+    // Pick a truly random valid landing spot from top to bottom
+    const chosen = validCells[Math.floor(Math.random() * validCells.length)];
+
+    fallingApples.push({
+      gx: chosen.gx,
+      targetGy: chosen.gy,
+      currentY: -GRID_SIZE * 3,
+      vy: Math.random() * 1.5 + 2.2,
+      gravity: 0.52,
+      bounceCount: 0,
+      color: FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
+      alpha: 1
     });
   }
+
+  // Interactive Falling Apples Engine (Left Mouse Click Spawner)
+  function handleSpawnClick(e) {
+    // Ignore clicks inside interactive UI components
+    if (e.target.closest("button, a, input, textarea, select, .topic-card, .sidebar-item, .modal-card, .monaco-editor, .hero-sandbox-card, .snippet-runner-card, .ide-header, .terminal-top, .top-nav")) {
+      return;
+    }
+
+    const clickGx = Math.max(1, Math.min(cols - 2, Math.floor(e.clientX / GRID_SIZE)));
+    dropNewApple(clickGx);
+  }
+
+  // Mouse Listener: Left Click (button 0) drops apples, Middle Click (button 1) does nothing
+  window.addEventListener("mousedown", (e) => {
+    if (e.button === 0) {
+      handleSpawnClick(e);
+    }
+  });
+
+  // Right Click (button 2) Menu Suppression on page (Turbo boost only, no context menu)
+  window.addEventListener("contextmenu", (e) => {
+    if (e.target.closest("#monacoEditorContainer, input, textarea")) return;
+    e.preventDefault();
+  });
+
+  // Ephemeral Turbo Sparks Particles
+  const turboParticles = [];
 
   // Step Clock Timing for Authentic Arcade Snake Speed
   const STEP_INTERVAL_MS = 85; // ~11-12 grid moves per second
   let lastStepTime = performance.now();
 
+  // Death & Glitch Particle Engine ("Python Kernel Panic")
+  let gameState = "ALIVE"; // "ALIVE" | "DYING" | "RESPAWNING"
+  let deathTimer = 0;
+  let respawnAlpha = 1;
+  const deathDebris = [];
+  let shockwave = null;
+  let errorToast = null;
+
+  const PYTHON_EXCEPTIONS = [
+    "RecursionError: maximum recursion depth exceeded",
+    "IndexError: list index out of range",
+    "ZeroDivisionError: division by zero",
+    "KeyboardInterrupt: execution interrupted",
+    "StopIteration: iterator exhausted",
+    "TimeoutError: execution timed out",
+    "MemoryError: out of memory",
+    "SystemExit: exit code 1"
+  ];
+
+  function triggerDeath(headGx, headGy) {
+    if (gameState !== "ALIVE") return;
+    gameState = "DYING";
+    deathTimer = performance.now();
+
+    const hx = headGx * GRID_SIZE + GRID_SIZE / 2;
+    const hy = headGy * GRID_SIZE + GRID_SIZE / 2;
+
+    // 1. Shockwave Ring
+    shockwave = {
+      x: hx,
+      y: hy,
+      radius: 4,
+      maxRadius: 120,
+      alpha: 1
+    };
+
+    // 2. Python Error Badge
+    const randomError = PYTHON_EXCEPTIONS[Math.floor(Math.random() * PYTHON_EXCEPTIONS.length)];
+    errorToast = {
+      text: randomError,
+      x: Math.max(160, Math.min(width - 160, hx)),
+      y: Math.max(50, Math.min(height - 50, hy - 24)),
+      alpha: 1,
+      glitchOffset: 0
+    };
+
+    // 3. Shatter snake segments into physics-driven cyber debris
+    deathDebris.length = 0;
+    const len = snake.length;
+
+    snake.forEach((seg, i) => {
+      const progress = 1 - i / len;
+      const r = Math.round(255 * (1 - progress) + 56 * progress);
+      const g = Math.round(107 * (1 - progress) + 189 * progress);
+      const b = Math.round(0 * (1 - progress) + 248 * progress);
+      const color = `rgb(${r}, ${g}, ${b})`;
+
+      const segX = seg.gx * GRID_SIZE;
+      const segY = seg.gy * GRID_SIZE;
+
+      // Shatter each segment into 4 mini-pixels (Cinematic Slow-Mo Physics)
+      for (let px = 0; px < 2; px++) {
+        for (let py = 0; py < 2; py++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 2.8 + 0.8;
+          deathDebris.push({
+            x: segX + px * (GRID_SIZE / 2),
+            y: segY + py * (GRID_SIZE / 2),
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 1.2, // Gentle pop upwards
+            size: GRID_SIZE / 2 - 1,
+            color: color,
+            alpha: 1,
+            gravity: 0.06, // Soft cyber-gravity
+            rotation: Math.random() * Math.PI,
+            rotSpeed: (Math.random() - 0.5) * 0.08
+          });
+        }
+      }
+    });
+  }
+
+  function respawnSnake() {
+    const isMouseRight = mouseTarget.active ? (mouseTarget.gx >= cols / 2) : (Math.random() > 0.5);
+    const spawnSide = isMouseRight ? "right" : "left";
+
+    // Target Y: close to mouse Y if active, or random row
+    const preferredGy = mouseTarget.active ? mouseTarget.gy : Math.floor(Math.random() * (rows - 6)) + 3;
+
+    // Find a free Y-row near preferredGy unobstructed by UI on the spawn edge
+    let chosenGy = preferredGy;
+    let foundFree = false;
+    const testGx = spawnSide === "right" ? cols - 2 : 1;
+
+    for (let offset = 0; offset < rows / 2; offset++) {
+      const gy1 = Math.max(1, Math.min(rows - 2, preferredGy + offset));
+      const gy2 = Math.max(1, Math.min(rows - 2, preferredGy - offset));
+
+      if (!isCellObstructedByUI(testGx, gy1)) {
+        chosenGy = gy1;
+        foundFree = true;
+        break;
+      }
+      if (!isCellObstructedByUI(testGx, gy2)) {
+        chosenGy = gy2;
+        foundFree = true;
+        break;
+      }
+    }
+
+    if (!foundFree) {
+      chosenGy = Math.floor(Math.random() * (rows - 4)) + 2;
+    }
+
+    snake = [];
+    if (spawnSide === "left") {
+      // Crawl in from left edge -> moving Right
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      for (let i = 0; i < INITIAL_LENGTH; i++) {
+        snake.push({ gx: -i, gy: chosenGy });
+      }
+    } else {
+      // Crawl in from right edge -> moving Left
+      dir = { x: -1, y: 0 };
+      nextDir = { x: -1, y: 0 };
+      for (let i = 0; i < INITIAL_LENGTH; i++) {
+        snake.push({ gx: cols - 1 + i, gy: chosenGy });
+      }
+    }
+
+    gameState = "RESPAWNING";
+    respawnAlpha = 1;
+    deathDebris.length = 0;
+    shockwave = null;
+    errorToast = null;
+  }
+
+  // Initialize snake position via clean off-screen entry on startup
+  respawnSnake();
+
   function getWrapDelta(from, to, max) {
     let diff = (to - from) % max;
     if (diff > max / 2) diff -= max;
     if (diff < -max / 2) diff += max;
-    return diff; // sign directly indicates the shortest direction along toroidal axis
+    return diff;
   }
 
   function torusDistance(gx1, gy1, gx2, gy2) {
@@ -2318,104 +2559,272 @@ function initBackgroundCanvas() {
 
   function chooseNextDirection() {
     const head = snake[0];
-    let target = null;
-
     const now = Date.now();
     const isMouseActive = mouseTarget.active && (now - mouseTarget.lastTime < 3000);
 
+    const cardinalDirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 }
+    ];
+
+    const possibleDirs = cardinalDirs.filter(d => !(d.x === -dir.x && d.y === -dir.y));
+
+    // ==========================================
+    // 1. MANUAL MODE (Follow Mouse Direct & Mortal)
+    // ==========================================
     if (isMouseActive) {
-      target = { gx: mouseTarget.gx, gy: mouseTarget.gy };
-    } else {
-      // Find closest active food
-      let minDist = Infinity;
-      foodList.forEach(food => {
-        const d = torusDistance(head.gx, head.gy, food.gx, food.gy);
-        if (d < minDist) {
-          minDist = d;
-          target = food;
-        }
+      const target = { gx: mouseTarget.gx, gy: mouseTarget.gy };
+      const dx = getWrapDelta(head.gx, target.gx, cols);
+      const dy = getWrapDelta(head.gy, target.gy, rows);
+
+      // Rank directions greedily purely by direct distance delta to mouse
+      const sortedManualDirs = [...possibleDirs].sort((a, b) => {
+        const distA = Math.abs(dx - a.x) + Math.abs(dy - a.y);
+        const distB = Math.abs(dx - b.x) + Math.abs(dy - b.y);
+        return distA - distB;
       });
+
+      // Greedily pick top direction moving towards the mouse without deep obstacle avoidance
+      return sortedManualDirs[0] || dir;
     }
+
+    // ==========================================
+    // 2. AUTOMATIC MODE (Smart BFS + Flood Fill)
+    // ==========================================
+    let target = null;
+    let minDist = Infinity;
+    foodList.forEach(food => {
+      const d = torusDistance(head.gx, head.gy, food.gx, food.gy);
+      if (d < minDist) {
+        minDist = d;
+        target = food;
+      }
+    });
 
     if (!target) {
       target = foodList[0] || { gx: 2, gy: 2 };
     }
 
-    const possibleDirs = [
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: -1 }
-    ].filter(d => !(d.x === -dir.x && d.y === -dir.y)); // Prevent 180-degree instant reversal
+    // BFS Pathfinding around UI obstacles & snake body
+    const queue = [];
+    const visited = new Set();
+    const headKey = `${head.gx},${head.gy}`;
+    visited.add(headKey);
 
-    let bestDir = possibleDirs[0] || dir;
-    let bestScore = Infinity;
-
-    // Evaluate each valid move (closest wrap distance to target, preventing self-collision)
+    // Seed BFS queue with valid immediate moves
     for (const d of possibleDirs) {
       const nextGx = (head.gx + d.x + cols) % cols;
       const nextGy = (head.gy + d.y + rows) % rows;
-
-      // Check if this step hits the snake body (excluding tail which will move away)
       const hitsBody = snake.slice(0, -1).some(seg => seg.gx === nextGx && seg.gy === nextGy);
-      if (hitsBody) continue;
+      const hitsUI = isCellObstructedByUI(nextGx, nextGy);
 
-      const dist = torusDistance(nextGx, nextGy, target.gx, target.gy);
-      // Small tie-breaker to prefer current direction when distances are equal
-      const momentumBonus = (d.x === dir.x && d.y === dir.y) ? -0.1 : 0;
-      const score = dist + momentumBonus;
-
-      if (score < bestScore) {
-        bestScore = score;
-        bestDir = d;
+      if (!hitsBody && !hitsUI) {
+        const key = `${nextGx},${nextGy}`;
+        visited.add(key);
+        queue.push({ gx: nextGx, gy: nextGy, firstDir: d, depth: 1 });
       }
     }
 
-    return bestDir;
+    if (queue.length === 0) {
+      // Completely surrounded -> trigger death
+      triggerDeath(head.gx, head.gy);
+      return dir;
+    }
+
+    let bestBfsDir = null;
+    const MAX_BFS_DEPTH = 60;
+
+    while (queue.length > 0) {
+      const curr = queue.shift();
+
+      if (curr.gx === target.gx && curr.gy === target.gy) {
+        bestBfsDir = curr.firstDir;
+        break;
+      }
+
+      if (curr.depth < MAX_BFS_DEPTH) {
+        for (const d of cardinalDirs) {
+          const nx = (curr.gx + d.x + cols) % cols;
+          const ny = (curr.gy + d.y + rows) % rows;
+          const key = `${nx},${ny}`;
+
+          if (!visited.has(key)) {
+            visited.add(key);
+            const hitsBody = snake.slice(0, -1).some(seg => seg.gx === nx && seg.gy === ny);
+            const hitsUI = isCellObstructedByUI(nx, ny);
+            if (!hitsBody && !hitsUI) {
+              queue.push({ gx: nx, gy: ny, firstDir: curr.firstDir, depth: curr.depth + 1 });
+            }
+          }
+        }
+      }
+    }
+
+    if (bestBfsDir) {
+      return bestBfsDir;
+    }
+
+    // Fallback: Flood Fill count for largest open area
+    let bestFallbackDir = null;
+    let maxFreeSpace = -1;
+
+    for (const d of possibleDirs) {
+      const nextGx = (head.gx + d.x + cols) % cols;
+      const nextGy = (head.gy + d.y + rows) % rows;
+      const hitsBody = snake.slice(0, -1).some(seg => seg.gx === nextGx && seg.gy === nextGy);
+      const hitsUI = isCellObstructedByUI(nextGx, nextGy);
+
+      if (!hitsBody && !hitsUI) {
+        let freeCount = 0;
+        const ffQueue = [{ gx: nextGx, gy: nextGy, step: 0 }];
+        const ffVisited = new Set([`${head.gx},${head.gy}`, `${nextGx},${nextGy}`]);
+
+        while (ffQueue.length > 0 && freeCount < 30) {
+          const cur = ffQueue.shift();
+          freeCount++;
+          if (cur.step < 8) {
+            for (const cd of cardinalDirs) {
+              const fx = (cur.gx + cd.x + cols) % cols;
+              const fy = (cur.gy + cd.y + rows) % rows;
+              const fk = `${fx},${fy}`;
+              if (!ffVisited.has(fk)) {
+                ffVisited.add(fk);
+                if (!snake.slice(0, -1).some(s => s.gx === fx && s.gy === fy) && !isCellObstructedByUI(fx, fy)) {
+                  ffQueue.push({ gx: fx, gy: fy, step: cur.step + 1 });
+                }
+              }
+            }
+          }
+        }
+
+        const dist = torusDistance(nextGx, nextGy, target.gx, target.gy);
+        const score = freeCount * 10 - dist + (d.x === dir.x && d.y === dir.y ? 2 : 0);
+
+        if (score > maxFreeSpace) {
+          maxFreeSpace = score;
+          bestFallbackDir = d;
+        }
+      }
+    }
+
+    return bestFallbackDir || dir;
   }
 
   function stepGame() {
-    nextDir = chooseNextDirection();
-    dir = nextDir;
+    if (gameState !== "ALIVE" && gameState !== "RESPAWNING") return;
 
+    nextDir = chooseNextDirection();
+    if (gameState === "DYING") return;
+
+    dir = nextDir;
     const head = snake[0];
     const newHead = {
       gx: (head.gx + dir.x + cols) % cols,
       gy: (head.gy + dir.y + rows) % rows
     };
 
+    // Self-bite check
+    const selfCollision = snake.slice(1).some(seg => seg.gx === newHead.gx && seg.gy === newHead.gy);
+    if (selfCollision) {
+      triggerDeath(newHead.gx, newHead.gy);
+      return;
+    }
+
     snake.unshift(newHead);
 
-    // Check food consumption
+    if (gameState === "RESPAWNING") {
+      respawnAlpha = Math.min(1, respawnAlpha + 0.1);
+      if (respawnAlpha >= 1) {
+        gameState = "ALIVE";
+      }
+    }
+
+    // Food consumption & capped auto-respawn
     let ateFood = false;
-    foodList.forEach((food, idx) => {
+    for (let idx = foodList.length - 1; idx >= 0; idx--) {
+      const food = foodList[idx];
       if (food.gx === newHead.gx && food.gy === newHead.gy) {
         ateFood = true;
-        food.scorePopup = 20; // Trigger score pop animation
-        foodList[idx] = spawnFood(idx);
+        const totalApples = foodList.length + fallingApples.length;
+
+        // If total apples on screen exceed 10, stop auto-spawning replacements
+        if (totalApples > 10) {
+          foodList.splice(idx, 1);
+        } else {
+          foodList[idx] = spawnFood(idx);
+        }
       }
-    });
+    }
 
     if (!ateFood) {
-      snake.pop(); // Remove tail if no food eaten
+      snake.pop();
     }
   }
 
   function render(time) {
-    if (document.hidden) {
+    // Pause background simulation when tab is hidden or user is inside a topic workspace
+    if (document.hidden || (workspaceView && workspaceView.classList.contains("active"))) {
+      lastStepTime = performance.now();
       animationFrameId = requestAnimationFrame(render);
       return;
     }
 
-    // Step on fixed time interval
-    if (time - lastStepTime >= STEP_INTERVAL_MS) {
+    // Calculate dynamic step interval based on snake growth and right-click turbo state
+    const isTurbo = Boolean(mouseTarget.isRightDown && snake.length > 0 && gameState === "ALIVE");
+
+    // Base interval (115ms) smoothly scales down as snake grows (down to 65ms)
+    const lengthBoost = Math.min(50, Math.max(0, snake.length - INITIAL_LENGTH) * 1.5);
+    let currentInterval = Math.max(65, 115 - lengthBoost);
+
+    // In Turbo Sprint mode (holding RIGHT mouse button) accelerate by ~45%
+    if (isTurbo) {
+      currentInterval = Math.max(38, Math.round(currentInterval * 0.55));
+    }
+
+    // Step game logic on dynamic tick
+    if (time - lastStepTime >= currentInterval) {
       stepGame();
       lastStepTime = time;
     }
 
+    // Emit vivid turbo jet sparks from the snake's tail during sprint
+    if (isTurbo && snake.length > 0) {
+      const tail = snake[snake.length - 1];
+      const prevTail = snake[snake.length - 2] || tail;
+
+      // Vector pointing away from snake body out the back of the tail
+      let tailDirX = getWrapDelta(prevTail.gx, tail.gx, cols);
+      let tailDirY = getWrapDelta(prevTail.gy, tail.gy, rows);
+      if (tailDirX === 0 && tailDirY === 0) {
+        tailDirX = -dir.x;
+        tailDirY = -dir.y;
+      }
+
+      const tx = tail.gx * GRID_SIZE + GRID_SIZE / 2;
+      const ty = tail.gy * GRID_SIZE + GRID_SIZE / 2;
+      const SPARK_PALETTE = ["#ff6b00", "#fbbf24", "#38bdf8", "#ffffff", "#f97316"];
+
+      // Emit multiple trailing particles each frame out the back
+      for (let s = 0; s < 3; s++) {
+        const spread = (Math.random() - 0.5) * 2.2;
+        const kickback = Math.random() * 3.5 + 1.2;
+        turboParticles.push({
+          x: tx + (Math.random() - 0.5) * 6,
+          y: ty + (Math.random() - 0.5) * 6,
+          vx: tailDirX * kickback + (-tailDirY * spread),
+          vy: tailDirY * kickback + (tailDirX * spread),
+          size: Math.random() * 2.5 + 2.5,
+          color: SPARK_PALETTE[Math.floor(Math.random() * SPARK_PALETTE.length)],
+          alpha: 1
+        });
+      }
+    }
+
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Subtle Retro Grid Dots (optional arcade background)
+    // 1. Draw Subtle Retro Grid Dots
     ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
     for (let x = 0; x < width; x += GRID_SIZE * 2) {
       for (let y = 0; y < height; y += GRID_SIZE * 2) {
@@ -2423,7 +2832,7 @@ function initBackgroundCanvas() {
       }
     }
 
-    // 2. Draw 8-Bit Food Apples (strictly on grid blocks)
+    // 2. Draw 8-Bit Food Apples
     ctx.save();
     foodList.forEach(food => {
       const fx = food.gx * GRID_SIZE;
@@ -2433,90 +2842,246 @@ function initBackgroundCanvas() {
       ctx.globalAlpha = 0.75;
       ctx.fillRect(fx + 2, fy + 2, GRID_SIZE - 4, GRID_SIZE - 4);
 
-      // Inner pixel highlight
       ctx.fillStyle = "#ffffff";
       ctx.globalAlpha = 0.9;
       ctx.fillRect(fx + 4, fy + 4, 3, 3);
     });
-    ctx.restore();
 
-    // 3. Draw Snake Body Segments (Solid, perfectly aligned retro blocks)
-    ctx.save();
-    const len = snake.length;
+    // 2.1 Update & Draw Interactive Falling Apples
+    for (let i = fallingApples.length - 1; i >= 0; i--) {
+      const apple = fallingApples[i];
+      apple.currentY += apple.vy;
+      apple.vy += apple.gravity;
 
-    for (let i = len - 1; i >= 0; i--) {
-      const seg = snake[i];
-      const progress = 1 - i / len;
+      const targetPxY = apple.targetGy * GRID_SIZE;
+      const ax = apple.gx * GRID_SIZE;
+      const ay = apple.currentY;
 
-      const sx = seg.gx * GRID_SIZE;
-      const sy = seg.gy * GRID_SIZE;
+      // Draw falling apple glow & cube
+      ctx.fillStyle = apple.color;
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(ax + 2, ay + 2, GRID_SIZE - 4, GRID_SIZE - 4);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(ax + 4, ay + 4, 3, 3);
 
-      // Color Gradient: Tail (#ff6b00 / orange) -> Head (#38bdf8 / cyan)
-      const r = Math.round(255 * (1 - progress) + 56 * progress);
-      const g = Math.round(107 * (1 - progress) + 189 * progress);
-      const b = Math.round(0 * (1 - progress) + 248 * progress);
-      const alpha = 0.35 + progress * 0.55;
-
-      // Segment Block
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
-
-      // Crisp 1px Arcade Block Border
-      ctx.strokeStyle = "rgba(7, 11, 16, 0.65)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
-
-      // Inner 8-bit highlight on leading segments
-      if (progress > 0.3) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-        ctx.fillRect(sx + 3, sy + 3, 2, 2);
+      // Trailing sparkles
+      if (Math.random() > 0.4) {
+        landingSparks.push({
+          x: ax + GRID_SIZE / 2 + (Math.random() - 0.5) * 6,
+          y: ay + GRID_SIZE / 2,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -Math.random() * 1.5,
+          color: apple.color,
+          alpha: 0.8,
+          size: 2
+        });
       }
 
-      // Draw Retro Arcade Eyes on Head Segment (aligned with movement direction)
-      if (i === 0) {
-        ctx.fillStyle = "#ffffff";
-        let eye1X, eye1Y, eye2X, eye2Y;
+      // Check landing / bounce
+      if (apple.currentY >= targetPxY) {
+        apple.currentY = targetPxY;
+        apple.bounceCount++;
+        apple.vy = -apple.vy * 0.38; // Soft bounce
 
-        if (dir.x === 1) { // Moving Right
-          eye1X = sx + GRID_SIZE - 5; eye1Y = sy + 3;
-          eye2X = sx + GRID_SIZE - 5; eye2Y = sy + GRID_SIZE - 6;
-        } else if (dir.x === -1) { // Moving Left
-          eye1X = sx + 2; eye1Y = sy + 3;
-          eye2X = sx + 2; eye2Y = sy + GRID_SIZE - 6;
-        } else if (dir.y === 1) { // Moving Down
-          eye1X = sx + 3; eye1Y = sy + GRID_SIZE - 5;
-          eye2X = sx + GRID_SIZE - 6; eye2Y = sy + GRID_SIZE - 5;
-        } else { // Moving Up
-          eye1X = sx + 3; eye1Y = sy + 2;
-          eye2X = sx + GRID_SIZE - 6; eye2Y = sy + 2;
+        // Emit landing particle burst
+        for (let s = 0; s < 6; s++) {
+          const angle = Math.random() * Math.PI * 2;
+          const spd = Math.random() * 2.5 + 0.8;
+          landingSparks.push({
+            x: ax + GRID_SIZE / 2,
+            y: targetPxY + GRID_SIZE / 2,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd - 1,
+            color: apple.color,
+            alpha: 1,
+            size: Math.random() > 0.5 ? 3 : 2
+          });
         }
 
-        ctx.fillRect(eye1X, eye1Y, 3, 3);
-        ctx.fillRect(eye2X, eye2Y, 3, 3);
+        if (apple.bounceCount >= 2 || Math.abs(apple.vy) < 0.6) {
+          // Settle as active food on the grid
+          foodList.push({
+            gx: apple.gx,
+            gy: apple.targetGy,
+            color: apple.color,
+            scorePopup: 15
+          });
+          fallingApples.splice(i, 1);
+        }
+      }
+    }
 
-        // Pupil pixels (dark cyan / black)
-        ctx.fillStyle = "#070b10";
-        ctx.fillRect(eye1X + (dir.x >= 0 ? 1 : 0), eye1Y + (dir.y >= 0 ? 1 : 0), 2, 2);
-        ctx.fillRect(eye2X + (dir.x >= 0 ? 1 : 0), eye2Y + (dir.y >= 0 ? 1 : 0), 2, 2);
+    // 2.2 Update & Draw Landing Sparks
+    for (let i = landingSparks.length - 1; i >= 0; i--) {
+      const spk = landingSparks[i];
+      spk.x += spk.vx;
+      spk.y += spk.vy;
+      spk.alpha -= 0.025;
+      if (spk.alpha > 0) {
+        ctx.fillStyle = spk.color;
+        ctx.globalAlpha = spk.alpha;
+        ctx.fillRect(spk.x, spk.y, spk.size, spk.size);
+      } else {
+        landingSparks.splice(i, 1);
       }
     }
     ctx.restore();
 
-    // 4. Draw Floating 8-bit Pixel Sparks
+    // 3. Draw Snake Body Segments (when alive or respawning)
+    if (gameState === "ALIVE" || gameState === "RESPAWNING") {
+      ctx.save();
+      const len = snake.length;
+      const currentAlphaMultiplier = gameState === "RESPAWNING" ? respawnAlpha : 1;
+
+      for (let i = len - 1; i >= 0; i--) {
+        const seg = snake[i];
+        const progress = 1 - i / len;
+
+        const sx = seg.gx * GRID_SIZE;
+        const sy = seg.gy * GRID_SIZE;
+
+        const r = Math.round(255 * (1 - progress) + 56 * progress);
+        const g = Math.round(107 * (1 - progress) + 189 * progress);
+        const b = Math.round(0 * (1 - progress) + 248 * progress);
+        const alpha = (0.35 + progress * 0.55) * currentAlphaMultiplier;
+
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        ctx.fillRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+
+        ctx.strokeStyle = `rgba(7, 11, 16, ${0.65 * currentAlphaMultiplier})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx + 1, sy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+
+        if (progress > 0.3) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${0.35 * currentAlphaMultiplier})`;
+          ctx.fillRect(sx + 3, sy + 3, 2, 2);
+        }
+
+        // Draw eyes on head
+        if (i === 0) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${currentAlphaMultiplier})`;
+          let eye1X, eye1Y, eye2X, eye2Y;
+
+          if (dir.x === 1) {
+            eye1X = sx + GRID_SIZE - 5; eye1Y = sy + 3;
+            eye2X = sx + GRID_SIZE - 5; eye2Y = sy + GRID_SIZE - 6;
+          } else if (dir.x === -1) {
+            eye1X = sx + 2; eye1Y = sy + 3;
+            eye2X = sx + 2; eye2Y = sy + GRID_SIZE - 6;
+          } else if (dir.y === 1) {
+            eye1X = sx + 3; eye1Y = sy + GRID_SIZE - 5;
+            eye2X = sx + GRID_SIZE - 6; eye2Y = sy + GRID_SIZE - 5;
+          } else {
+            eye1X = sx + 3; eye1Y = sy + 2;
+            eye2X = sx + GRID_SIZE - 6; eye2Y = sy + 2;
+          }
+
+          ctx.fillRect(eye1X, eye1Y, 3, 3);
+          ctx.fillRect(eye2X, eye2Y, 3, 3);
+
+          ctx.fillStyle = `rgba(7, 11, 16, ${currentAlphaMultiplier})`;
+          ctx.fillRect(eye1X + (dir.x >= 0 ? 1 : 0), eye1Y + (dir.y >= 0 ? 1 : 0), 2, 2);
+          ctx.fillRect(eye2X + (dir.x >= 0 ? 1 : 0), eye2Y + (dir.y >= 0 ? 1 : 0), 2, 2);
+        }
+      }
+      ctx.restore();
+    }
+
+    // 4. Update & Draw Death Glitch Debris
+    if (gameState === "DYING") {
+      const elapsedDeath = performance.now() - deathTimer;
+
+      ctx.save();
+      for (let i = 0; i < deathDebris.length; i++) {
+        const d = deathDebris[i];
+        d.x += d.vx;
+        d.y += d.vy;
+        d.vy += d.gravity;
+        d.vx *= 0.99;
+        d.rotation += d.rotSpeed;
+        d.alpha -= 0.004;
+
+        if (d.alpha > 0) {
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(d.rotation);
+          ctx.fillStyle = d.color;
+          ctx.globalAlpha = Math.max(0, d.alpha);
+          ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+
+      // Shockwave ring (gentle slow expansion)
+      if (shockwave && shockwave.alpha > 0) {
+        ctx.save();
+        shockwave.radius += 1.8;
+        shockwave.alpha -= 0.012;
+        ctx.strokeStyle = `rgba(239, 68, 68, ${Math.max(0, shockwave.alpha)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(shockwave.x, shockwave.y, shockwave.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Python Error Toast (Floating Glitch Chip - stays solid for 1.8s, then smoothly fades)
+      if (errorToast && errorToast.alpha > 0) {
+        ctx.save();
+        if (elapsedDeath > 1800) {
+          errorToast.alpha -= 0.012;
+        }
+        errorToast.y -= 0.12;
+        errorToast.glitchOffset = (Math.random() - 0.5) * 1.5;
+
+        const fullText = "⚠️ " + errorToast.text;
+        ctx.font = '600 12px "JetBrains Mono", Consolas, monospace';
+        const textWidth = ctx.measureText(fullText).width;
+        const paddingX = 14;
+        const boxW = textWidth + paddingX * 2;
+        const boxH = 28;
+        const bx = errorToast.x - boxW / 2 + errorToast.glitchOffset;
+        const by = errorToast.y - boxH / 2;
+
+        // Backdrop
+        ctx.fillStyle = `rgba(15, 23, 42, ${0.92 * errorToast.alpha})`;
+        ctx.strokeStyle = `rgba(239, 68, 68, ${0.9 * errorToast.alpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Icon & Text
+        ctx.fillStyle = `rgba(239, 68, 68, ${errorToast.alpha})`;
+        ctx.fillText(fullText, bx + paddingX, by + 18);
+        ctx.restore();
+      }
+
+      // Trigger respawn after ~3.2s
+      if (elapsedDeath > 3200) {
+        respawnSnake();
+      }
+    }
+
+    // 5. Update & Draw Ephemeral Turbo Sparks (luminous trailing jet)
     ctx.save();
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
+    for (let i = turboParticles.length - 1; i >= 0; i--) {
+      const p = turboParticles[i];
       p.x += p.vx;
       p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.alpha -= 0.028;
 
-      if (p.x < -20) p.x = width + 20;
-      if (p.x > width + 20) p.x = -20;
-      if (p.y < -20) p.y = height + 20;
-      if (p.y > height + 20) p.y = -20;
-
-      ctx.fillStyle = p.color;
-      ctx.globalAlpha = p.alpha;
-      ctx.fillRect(Math.floor(p.x / 2) * 2, Math.floor(p.y / 2) * 2, p.size, p.size);
+      if (p.alpha > 0) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      } else {
+        turboParticles.splice(i, 1);
+      }
     }
     ctx.restore();
 

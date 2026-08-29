@@ -129,13 +129,23 @@ body {
 }
 
 .brand-badge {
-  background: var(--primary);
-  color: #000;
-  font-weight: 900;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 15px;
-  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.brand-python-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  transition: transform 0.2s ease;
+}
+
+.brand-link:hover .brand-python-icon {
+  transform: rotate(-6deg) scale(1.08);
 }
 
 .brand-title {
