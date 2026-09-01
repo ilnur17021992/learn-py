@@ -245,6 +245,22 @@ document.addEventListener("DOMContentLoaded", () => {
   initTerminalResizer();
   updateProgressUI();
   initPyodide();
+
+  // Restore active topic from URL hash if present
+  const hashTopic = window.location.hash.replace(/^#/, "");
+  if (hashTopic && TOPICS.some(t => t.id === hashTopic)) {
+    openTopicWorkspace(hashTopic, false);
+  }
+
+  // Handle browser Back / Forward navigation between topics and catalog
+  window.addEventListener("hashchange", () => {
+    const currentHash = window.location.hash.replace(/^#/, "");
+    if (currentHash && TOPICS.some(t => t.id === currentHash)) {
+      openTopicWorkspace(currentHash, false);
+    } else {
+      showCatalogView(false);
+    }
+  });
 });
 
 // Setup Monaco Editor (Right Pane IDE)
@@ -318,7 +334,8 @@ function initMonacoEditor() {
           suggestions.push({
             label: b,
             kind: monaco.languages.CompletionItemKind.Function,
-            insertText: b,
+            insertText: b === 'print' ? 'print($0)' : `${b}($0)`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "builtin function",
             range: range
           });
@@ -328,11 +345,40 @@ function initMonacoEditor() {
           suggestions.push({
             label: m,
             kind: monaco.languages.CompletionItemKind.Method,
-            insertText: m,
+            insertText: `${m}($0)`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: "method",
             range: range
           });
         });
+
+        // Snippets
+        suggestions.push(
+          {
+            label: 'def',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: ['def ${1:func_name}(${2:params}):', '\t${0:pass}'].join('\n'),
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'function definition snippet',
+            range: range
+          },
+          {
+            label: 'class',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: ['class ${1:ClassName}:', '\tdef __init__(self${2:, params}):', '\t\t${0:pass}'].join('\n'),
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'class definition snippet',
+            range: range
+          },
+          {
+            label: 'ifmain',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: ['if __name__ == "__main__":', '\t${0:main()}'].join('\n'),
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'if __name__ == "__main__" boilerplate',
+            range: range
+          }
+        );
 
         return { suggestions: suggestions };
       }
@@ -397,7 +443,13 @@ print(greet("Разработчик"))
         enabled: true
       },
       formatOnPaste: true,
-      wordWrap: "on"
+      wordWrap: "on",
+      quickSuggestions: { other: true, comments: true, strings: true },
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: "on",
+      tabCompletion: "on",
+      wordBasedSuggestions: "allDocuments",
+      suggestSelection: "first"
     });
 
     // Shortcuts inside Monaco
@@ -569,11 +621,18 @@ function renderSidebar() {
 }
 
 // Open Topic in Workspace View
-function openTopicWorkspace(topicId) {
+function openTopicWorkspace(topicId, updateHash = true) {
   const topic = TOPICS.find((t) => t.id === topicId);
   if (!topic) return;
 
   currentTopic = topic;
+
+  if (updateHash && window.location.hash !== `#${topicId}`) {
+    history.pushState(null, null, `#${topicId}`);
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY_LAST_TOPIC, topicId);
+  } catch (e) {}
 
   // Switch Views
   catalogView.style.display = "none";
@@ -608,11 +667,14 @@ function openTopicWorkspace(topicId) {
       <div class="snippet-top-bar">
         <span class="snippet-name">Пример ${idx + 1}: ${escapeHtml(ex.title)}</span>
         <div class="snippet-btn-group">
+          <button class="snippet-action-btn copy-code-btn" title="Скопировать код в буфер обмена">
+            📋 Копировать
+          </button>
           <button class="snippet-action-btn load-ide-btn" title="Загрузить в правую IDE">
             📝 В редактор
           </button>
           <button class="snippet-action-btn primary run-inline-btn" title="Выполнить прямо здесь">
-            ▶ Запустить здесь
+            ▶ Запустить
           </button>
         </div>
       </div>
@@ -621,9 +683,26 @@ function openTopicWorkspace(topicId) {
       <div class="inline-output-box" id="inlineOut_${topic.id}_${idx}"></div>
     `;
 
+    const copyCodeBtn = card.querySelector(".copy-code-btn");
     const runInlineBtn = card.querySelector(".run-inline-btn");
     const loadIdeBtn = card.querySelector(".load-ide-btn");
     const outputBox = card.querySelector(".inline-output-box");
+
+    // Copy snippet code to clipboard
+    copyCodeBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(ex.code);
+        const originalHtml = copyCodeBtn.innerHTML;
+        copyCodeBtn.innerHTML = "✓ Скопировано";
+        copyCodeBtn.classList.add("copied");
+        setTimeout(() => {
+          copyCodeBtn.innerHTML = originalHtml;
+          copyCodeBtn.classList.remove("copied");
+        }, 1500);
+      } catch (err) {
+        console.error("Clipboard copy failed:", err);
+      }
+    });
 
     // Run snippet directly on the spot (Jupyter-style)
     runInlineBtn.addEventListener("click", async () => {
@@ -687,9 +766,15 @@ function loadCodeIntoIde(code, saveToStorage = true) {
 }
 
 // Switch back to Catalog
-function showCatalogView() {
+function showCatalogView(updateHash = true) {
   workspaceView.classList.remove("active");
   catalogView.style.display = "block";
+  if (updateHash) {
+    history.pushState(null, null, window.location.pathname + window.location.search);
+  }
+  try {
+    localStorage.removeItem(STORAGE_KEY_LAST_TOPIC);
+  } catch (e) {}
 }
 
 // Execute Python Code via Pyodide
@@ -844,7 +929,7 @@ async function runIdeCode() {
 async function initPyodide() {
   if (pyodideInstance || isPyodideLoading) return;
   isPyodideLoading = true;
-  updateStatus(false, "Загрузка Python 3.12...");
+  updateStatus("loading");
 
   try {
     if (typeof loadPyodide === "undefined") {
@@ -858,25 +943,29 @@ async function initPyodide() {
         return input !== null ? input + "\n" : null;
       }
     });
-    updateStatus(false, "Подготовка интерактивной среды...");
     await pyodideInstance.loadPackage("micropip");
     const micropip = pyodideInstance.pyimport("micropip");
     await micropip.install("autopep8");
 
-    updateStatus(true, "Python 3.12 готов");
+    updateStatus("ready");
     runIdeBtn.disabled = false;
     stepDebugBtn.disabled = false;
   } catch (err) {
-    console.error("Ошибка загрузки среды:", err);
-    updateStatus(false, "Ошибка запуска Python");
+    console.error("Ошибка загрузки среды Python / Pyodide:", err);
+    updateStatus("error");
   } finally {
     isPyodideLoading = false;
   }
 }
 
-function updateStatus(isReady, message) {
-  statusText.textContent = message;
-  statusDot.className = `status-dot ${isReady ? "ready" : ""}`;
+function updateStatus(state) {
+  if (statusText) {
+    statusText.textContent = "Python 3.12";
+    statusText.style.display = "inline";
+  }
+  if (statusDot) {
+    statusDot.className = `status-dot ${state}`;
+  }
 }
 
 // Event Listeners
@@ -1110,10 +1199,21 @@ except Exception as e:
 
 // Vertical Resizer for Output Terminal
 function initTerminalResizer() {
+  const STORAGE_KEY_PRACTICE_TERMINAL_HEIGHT = "learn_py_practice_terminal_height";
   const terminalPane = document.getElementById("ideTerminalPane") || document.querySelector(".ide-terminal-pane");
   const resizer = document.getElementById("terminalResizer") || document.querySelector(".terminal-top");
   const idePane = document.querySelector(".workspace-ide-pane");
   if (!terminalPane || !resizer || !idePane) return;
+
+  // Restore saved terminal height
+  try {
+    const savedHeight = localStorage.getItem(STORAGE_KEY_PRACTICE_TERMINAL_HEIGHT);
+    if (savedHeight) {
+      terminalPane.style.height = `${parseFloat(savedHeight)}px`;
+    }
+  } catch (e) {
+    console.error("Error loading saved terminal height:", e);
+  }
 
   let isDragging = false;
   let startY = 0;
@@ -1151,6 +1251,10 @@ function initTerminalResizer() {
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     terminalPane.classList.remove("resizing");
+
+    try {
+      localStorage.setItem(STORAGE_KEY_PRACTICE_TERMINAL_HEIGHT, String(terminalPane.getBoundingClientRect().height));
+    } catch (e) {}
 
     if (monacoEditor) {
       monacoEditor.layout();
@@ -1214,8 +1318,11 @@ import sys
 import io
 import json
 import types
+import builtins
+import ast
+import js
 
-def __trace_exec__(code_str, max_steps=500):
+async def __trace_exec__(code_str, max_steps=500):
     steps = []
     stdout_buf = io.StringIO()
     old_stdout = sys.stdout
@@ -1280,10 +1387,46 @@ def __trace_exec__(code_str, max_steps=500):
         steps.append(step_data)
         return tracer
 
+    # Asynchronously collect inputs interactively from user
+    input_values_queue = []
+    try:
+        parsed_tree = ast.parse(code_str, "main.py")
+        for node in ast.walk(parsed_tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "input":
+                prompt_arg = ""
+                if node.args and isinstance(node.args[0], ast.Constant):
+                    prompt_arg = str(node.args[0].value)
+                val = await js.showCustomInputModal(prompt_arg)
+                if val is None:
+                    raise EOFError("Ввод отменен пользователем")
+                input_values_queue.append((prompt_arg, str(val)))
+    except EOFError:
+        sys.stdout = old_stdout
+        return json.dumps([])
+    except Exception:
+        pass
+
+    input_iter = iter(input_values_queue)
+
+    def interactive_trace_input(prompt=""):
+        prompt_str = str(prompt) if prompt is not None else ""
+        if prompt_str:
+            stdout_buf.write(prompt_str)
+        try:
+            p_arg, user_val = next(input_iter)
+            stdout_buf.write(user_val + "\\n")
+            return user_val
+        except StopIteration:
+            stdout_buf.write("\\n")
+            return ""
+
+    old_input = getattr(builtins, "input", None)
+    builtins.input = interactive_trace_input
+
     try:
         compiled = compile(code_str, "main.py", "exec")
         sys.settrace(tracer)
-        exec_globals = {"__name__": "__main__"}
+        exec_globals = {"__name__": "__main__", "input": interactive_trace_input}
         exec(compiled, exec_globals)
     except Exception as e:
         steps.append({
@@ -1298,11 +1441,13 @@ def __trace_exec__(code_str, max_steps=500):
         })
     finally:
         sys.settrace(None)
+        if old_input is not None:
+            builtins.input = old_input
         sys.stdout = old_stdout
 
     return json.dumps(steps)
 
-__debug_steps_json__ = __trace_exec__(__debug_code__)
+__debug_steps_json__ = await __trace_exec__(__debug_code__)
 `;
 
     await pyodideInstance.runPythonAsync(traceScript);
@@ -1310,7 +1455,6 @@ __debug_steps_json__ = __trace_exec__(__debug_code__)
     debugSteps = JSON.parse(stepsJson);
 
     if (!debugSteps || debugSteps.length === 0) {
-      alert("Не удалось записать шаги выполнения.");
       return;
     }
 
@@ -1328,7 +1472,7 @@ __debug_steps_json__ = __trace_exec__(__debug_code__)
     alert(`Ошибка запуска дебаггера: ${err.message || err}`);
   } finally {
     stepDebugBtn.disabled = false;
-    stepDebugBtn.innerHTML = "<span>👣</span> По шагам";
+    stepDebugBtn.innerHTML = "<span>🪲</span> Отладка";
   }
 }
 
@@ -2196,45 +2340,91 @@ function initBackgroundCanvas() {
   let dir = { x: 1, y: 0 };
   let nextDir = { x: 1, y: 0 };
 
-  // Mouse Grid Target & Turbo State
-  let mouseTarget = {
-    gx: 5,
-    gy: 5,
-    active: false,
-    isRightDown: false,
-    lastTime: Date.now()
-  };
+  // Snake Score & High Score State
+  const STORAGE_KEY_SNAKE_HIGHSCORE = "learn_py_snake_highscore";
+  let snakeCurrentScore = 0;
+  let snakeHighScore = 0;
+  try {
+    snakeHighScore = parseInt(localStorage.getItem(STORAGE_KEY_SNAKE_HIGHSCORE) || "0", 10) || 0;
+  } catch (e) {
+    snakeHighScore = 0;
+  }
 
-  window.addEventListener("mousemove", (e) => {
-    mouseTarget.gx = Math.max(0, Math.min(cols - 1, Math.floor(e.clientX / GRID_SIZE)));
-    mouseTarget.gy = Math.max(0, Math.min(rows - 1, Math.floor(e.clientY / GRID_SIZE)));
-    mouseTarget.active = true;
-    mouseTarget.lastTime = Date.now();
-    if (e.buttons !== undefined) {
-      mouseTarget.isRightDown = (e.buttons & 2) === 2;
+  const snakeCurrentScoreEl = document.getElementById("snakeCurrentScore");
+  const snakeHighScoreEl = document.getElementById("snakeHighScore");
+
+  function updateSnakeScoreHUD(pulse = false) {
+    if (snakeCurrentScoreEl) {
+      snakeCurrentScoreEl.textContent = snakeCurrentScore;
+      if (pulse) {
+        snakeCurrentScoreEl.classList.remove("pulse");
+        void snakeCurrentScoreEl.offsetWidth;
+        snakeCurrentScoreEl.classList.add("pulse");
+        setTimeout(() => snakeCurrentScoreEl.classList.remove("pulse"), 250);
+      }
     }
-  }, { passive: true });
+    if (snakeHighScoreEl) {
+      snakeHighScoreEl.textContent = snakeHighScore;
+    }
+  }
+  updateSnakeScoreHUD();
 
-  window.addEventListener("mousedown", (e) => {
-    if (e.button === 2) {
-      // Right click activates Turbo Sprint across page (except inside code editor/inputs)
-      if (!e.target.closest("#monacoEditorContainer, input, textarea")) {
-        mouseTarget.isRightDown = true;
-        mouseTarget.active = true;
-        mouseTarget.lastTime = Date.now();
+  // Keyboard Navigation (WASD & Arrows) & Space Turbo State
+  let manualKeyDir = null;
+  let isSpaceTurbo = false;
+  let lastKeyboardTime = 0;
+
+  window.addEventListener("keydown", (e) => {
+    // Ignore when typing inside inputs, textareas, search palettes, modals, or code editor
+    if (
+      e.target.closest("input, textarea, select, .monaco-editor") ||
+      (searchPaletteModal && searchPaletteModal.style.display === "flex") ||
+      (customInputModal && customInputModal.style.display === "flex") ||
+      (hotkeysModal && hotkeysModal.style.display === "flex") ||
+      (workspaceView && workspaceView.classList.contains("active"))
+    ) {
+      return;
+    }
+
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      isSpaceTurbo = true;
+      return;
+    }
+
+    let newDir = null;
+    const code = e.code;
+    const key = e.key ? e.key.toLowerCase() : "";
+
+    // WASD + Arrow Keys + Russian layout support (Ц, Ф, Ы, В)
+    if (code === "KeyW" || key === "w" || key === "ц" || code === "ArrowUp" || key === "arrowup") {
+      newDir = { x: 0, y: -1 };
+    } else if (code === "KeyS" || key === "s" || key === "ы" || code === "ArrowDown" || key === "arrowdown") {
+      newDir = { x: 0, y: 1 };
+    } else if (code === "KeyA" || key === "a" || key === "ф" || code === "ArrowLeft" || key === "arrowleft") {
+      newDir = { x: -1, y: 0 };
+    } else if (code === "KeyD" || key === "d" || key === "в" || code === "ArrowRight" || key === "arrowright") {
+      newDir = { x: 1, y: 0 };
+    }
+
+    if (newDir) {
+      e.preventDefault();
+      if (!(newDir.x === -dir.x && newDir.y === -dir.y)) {
+        manualKeyDir = newDir;
+        nextDir = newDir;
+        lastKeyboardTime = Date.now();
       }
     }
   });
 
-  window.addEventListener("mouseup", (e) => {
-    if (e.button === 2 || (e.buttons !== undefined && (e.buttons & 2) === 0)) {
-      mouseTarget.isRightDown = false;
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space" || e.key === " ") {
+      isSpaceTurbo = false;
     }
   });
 
-  window.addEventListener("mouseleave", () => {
-    mouseTarget.active = false;
-    mouseTarget.isRightDown = false;
+  window.addEventListener("blur", () => {
+    isSpaceTurbo = false;
   });
 
   // Retro Arcade Apples / Data Cubes (strictly grid-aligned and avoiding UI cards)
@@ -2252,7 +2442,7 @@ function initBackgroundCanvas() {
     lastUiCacheTime = now;
 
     uiBlockGrid.fill(0);
-    const cards = document.querySelectorAll(".topic-card, .catalog-hero, .top-nav, .catalog-section-divider, .modal-card");
+    const cards = document.querySelectorAll(".topic-card, .catalog-hero, .catalog-section-divider, .modal-card");
 
     for (let i = 0; i < cards.length; i++) {
       const el = cards[i];
@@ -2282,31 +2472,57 @@ function initBackgroundCanvas() {
   updateUiObstacleCache(true);
 
   function isCellObstructedByUI(gx, gy) {
-    if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return true;
-    return uiBlockGrid[gy * cols + gx] === 1;
+    // Змейка может свободно перемещаться по всему экрану под карточками и блоками
+    return false;
+  }
+
+  // Calculate Side Gutter Bounds (left & right side zones outside main content)
+  function getSideGutterBounds() {
+    const mainContainer = document.getElementById("catalogHero") || document.getElementById("topicsGrid") || document.getElementById("catalogView");
+    let leftMaxGx = Math.floor(cols * 0.18);
+    let rightMinGx = Math.floor(cols * 0.82);
+
+    if (mainContainer) {
+      const rect = mainContainer.getBoundingClientRect();
+      if (rect.width > 0) {
+        const leftBoundaryGx = Math.max(1, Math.floor(rect.left / GRID_SIZE) - 1);
+        const rightBoundaryGx = Math.min(cols - 2, Math.ceil(rect.right / GRID_SIZE) + 1);
+
+        if (leftBoundaryGx >= 2) leftMaxGx = leftBoundaryGx;
+        if (rightBoundaryGx <= cols - 3) rightMinGx = rightBoundaryGx;
+      }
+    }
+
+    return {
+      leftMinGx: 1,
+      leftMaxGx: Math.max(2, leftMaxGx),
+      rightMinGx: Math.min(cols - 3, rightMinGx),
+      rightMaxGx: cols - 2
+    };
   }
 
   function spawnFood(index) {
+    const bounds = getSideGutterBounds();
     let gx, gy, collision;
     let attempts = 0;
+
     do {
-      // Pick random cell across the viewport
-      gx = Math.floor(Math.random() * (cols - 4)) + 2;
+      // Pick strictly left or right side gutter
+      const isLeft = Math.random() < 0.5;
+      if (isLeft) {
+        gx = Math.floor(Math.random() * (bounds.leftMaxGx - bounds.leftMinGx + 1)) + bounds.leftMinGx;
+      } else {
+        gx = Math.floor(Math.random() * (bounds.rightMaxGx - bounds.rightMinGx + 1)) + bounds.rightMinGx;
+      }
       gy = Math.floor(Math.random() * (rows - 4)) + 2;
 
-      // Check collision with snake body or UI cards
+      // Check collision with snake body or existing apples
       const hitsSnake = snake.some(seg => seg.gx === gx && seg.gy === gy);
-      const hitsUI = isCellObstructedByUI(gx, gy);
+      const hitsOtherFood = foodList.some(f => f.gx === gx && f.gy === gy);
 
-      collision = hitsSnake || hitsUI;
+      collision = hitsSnake || hitsOtherFood;
       attempts++;
-    } while (collision && attempts < 80);
-
-    // Fallback if all random spots were obstructed (place in side gutters / margins)
-    if (attempts >= 80) {
-      gx = Math.random() > 0.5 ? 2 : Math.max(2, cols - 3);
-      gy = Math.floor(Math.random() * (rows - 4)) + 2;
-    }
+    } while (collision && attempts < 60);
 
     return {
       gx,
@@ -2320,49 +2536,25 @@ function initBackgroundCanvas() {
     foodList.push(spawnFood(i));
   }
 
-  // Interactive Falling Apples Engine (Right-Click Spawn)
+  // Interactive Falling Apples Engine (Left Mouse Click Spawner)
   const fallingApples = [];
   const landingSparks = [];
 
   function dropNewApple(preferredGx = null) {
-    // 1. Gather all valid unobstructed candidate grid cells across the screen (especially side gutters)
-    const validCells = [];
+    const bounds = getSideGutterBounds();
+    const isLeft = preferredGx !== null ? preferredGx < cols / 2 : Math.random() < 0.5;
 
-    // Prioritize side gutters (left & right free areas) and open corridors
-    for (let gx = 1; gx < cols - 1; gx++) {
-      // If user clicked a specific side/column, give priority to nearby columns
-      if (preferredGx !== null && Math.abs(gx - preferredGx) > cols * 0.45) continue;
-
-      for (let gy = 2; gy < rows - 2; gy++) {
-        if (!isCellObstructedByUI(gx, gy)) {
-          const alreadyHasFood = foodList.some(f => f.gx === gx && f.gy === gy);
-          const alreadyFallingThere = fallingApples.some(a => a.gx === gx && a.targetGy === gy);
-          if (!alreadyHasFood && !alreadyFallingThere) {
-            validCells.push({ gx, gy });
-          }
-        }
-      }
+    let targetGx;
+    if (isLeft) {
+      targetGx = Math.floor(Math.random() * (bounds.leftMaxGx - bounds.leftMinGx + 1)) + bounds.leftMinGx;
+    } else {
+      targetGx = Math.floor(Math.random() * (bounds.rightMaxGx - bounds.rightMinGx + 1)) + bounds.rightMinGx;
     }
-
-    // Fallback across whole grid if subset was empty
-    if (validCells.length === 0) {
-      for (let gx = 1; gx < cols - 1; gx++) {
-        for (let gy = 2; gy < rows - 2; gy++) {
-          if (!isCellObstructedByUI(gx, gy)) {
-            validCells.push({ gx, gy });
-          }
-        }
-      }
-    }
-
-    if (validCells.length === 0) return;
-
-    // Pick a truly random valid landing spot from top to bottom
-    const chosen = validCells[Math.floor(Math.random() * validCells.length)];
+    const targetGy = Math.floor(Math.random() * (rows - 6)) + 3;
 
     fallingApples.push({
-      gx: chosen.gx,
-      targetGy: chosen.gy,
+      gx: targetGx,
+      targetGy: targetGy,
       currentY: -GRID_SIZE * 3,
       vy: Math.random() * 1.5 + 2.2,
       gravity: 0.52,
@@ -2427,6 +2619,9 @@ function initBackgroundCanvas() {
     gameState = "DYING";
     deathTimer = performance.now();
 
+    snakeCurrentScore = 0;
+    updateSnakeScoreHUD();
+
     const hx = headGx * GRID_SIZE + GRID_SIZE / 2;
     const hy = headGy * GRID_SIZE + GRID_SIZE / 2;
 
@@ -2486,11 +2681,8 @@ function initBackgroundCanvas() {
   }
 
   function respawnSnake() {
-    const isMouseRight = mouseTarget.active ? (mouseTarget.gx >= cols / 2) : (Math.random() > 0.5);
-    const spawnSide = isMouseRight ? "right" : "left";
-
-    // Target Y: close to mouse Y if active, or random row
-    const preferredGy = mouseTarget.active ? mouseTarget.gy : Math.floor(Math.random() * (rows - 6)) + 3;
+    const spawnSide = Math.random() > 0.5 ? "right" : "left";
+    const preferredGy = Math.floor(Math.random() * (rows - 6)) + 3;
 
     // Find a free Y-row near preferredGy unobstructed by UI on the spawn edge
     let chosenGy = preferredGy;
@@ -2560,7 +2752,7 @@ function initBackgroundCanvas() {
   function chooseNextDirection() {
     const head = snake[0];
     const now = Date.now();
-    const isMouseActive = mouseTarget.active && (now - mouseTarget.lastTime < 3000);
+    const isKeyboardActive = manualKeyDir && (now - lastKeyboardTime < 10000);
 
     const cardinalDirs = [
       { x: 1, y: 0 },
@@ -2572,22 +2764,12 @@ function initBackgroundCanvas() {
     const possibleDirs = cardinalDirs.filter(d => !(d.x === -dir.x && d.y === -dir.y));
 
     // ==========================================
-    // 1. MANUAL MODE (Follow Mouse Direct & Mortal)
+    // 1. KEYBOARD WASD / ARROWS CONTROL MODE
     // ==========================================
-    if (isMouseActive) {
-      const target = { gx: mouseTarget.gx, gy: mouseTarget.gy };
-      const dx = getWrapDelta(head.gx, target.gx, cols);
-      const dy = getWrapDelta(head.gy, target.gy, rows);
-
-      // Rank directions greedily purely by direct distance delta to mouse
-      const sortedManualDirs = [...possibleDirs].sort((a, b) => {
-        const distA = Math.abs(dx - a.x) + Math.abs(dy - a.y);
-        const distB = Math.abs(dx - b.x) + Math.abs(dy - b.y);
-        return distA - distB;
-      });
-
-      // Greedily pick top direction moving towards the mouse without deep obstacle avoidance
-      return sortedManualDirs[0] || dir;
+    if (isKeyboardActive) {
+      if (!(manualKeyDir.x === -dir.x && manualKeyDir.y === -dir.y)) {
+        return manualKeyDir;
+      }
     }
 
     // ==========================================
@@ -2634,7 +2816,7 @@ function initBackgroundCanvas() {
     }
 
     let bestBfsDir = null;
-    const MAX_BFS_DEPTH = 60;
+    const MAX_BFS_DEPTH = Math.max(120, cols + rows * 2);
 
     while (queue.length > 0) {
       const curr = queue.shift();
@@ -2747,6 +2929,17 @@ function initBackgroundCanvas() {
       const food = foodList[idx];
       if (food.gx === newHead.gx && food.gy === newHead.gy) {
         ateFood = true;
+        snakeCurrentScore += 1;
+
+        if (snakeCurrentScore > snakeHighScore) {
+          snakeHighScore = snakeCurrentScore;
+          try {
+            localStorage.setItem(STORAGE_KEY_SNAKE_HIGHSCORE, String(snakeHighScore));
+          } catch (e) {}
+        }
+
+        updateSnakeScoreHUD(true);
+
         const totalApples = foodList.length + fallingApples.length;
 
         // If total apples on screen exceed 10, stop auto-spawning replacements
@@ -2771,14 +2964,14 @@ function initBackgroundCanvas() {
       return;
     }
 
-    // Calculate dynamic step interval based on snake growth and right-click turbo state
-    const isTurbo = Boolean(mouseTarget.isRightDown && snake.length > 0 && gameState === "ALIVE");
+    // Calculate dynamic step interval based on snake growth and spacebar turbo state
+    const isTurbo = Boolean(isSpaceTurbo && snake.length > 0 && gameState === "ALIVE");
 
     // Base interval (115ms) smoothly scales down as snake grows (down to 65ms)
     const lengthBoost = Math.min(50, Math.max(0, snake.length - INITIAL_LENGTH) * 1.5);
     let currentInterval = Math.max(65, 115 - lengthBoost);
 
-    // In Turbo Sprint mode (holding RIGHT mouse button) accelerate by ~45%
+    // In Turbo Sprint mode (holding Space) accelerate by ~45%
     if (isTurbo) {
       currentInterval = Math.max(38, Math.round(currentInterval * 0.55));
     }

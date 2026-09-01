@@ -1,0 +1,345 @@
+/* styles/terminal.css - Terminal Panel & Controls */
+.ide-terminal-section {
+  height: var(--terminal-height, 220px);
+  min-height: 80px;
+  max-height: 70vh;
+  background-color: var(--bg-darker, #010409);
+  border-top: 1px solid var(--border-color, #30363d);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Terminal Header */
+.terminal-header {
+  height: 32px;
+  background-color: var(--bg-secondary, #161b22);
+  border-bottom: 1px solid var(--border-color, #30363d);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  user-select: none;
+}
+
+.terminal-tabs {
+  display: flex;
+  align-items: center;
+}
+
+.term-tab {
+  font-size: 11.5px;
+  color: var(--text-main, #e6edf3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.worker-status-badge {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted, #8b949e);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.worker-status-badge.status-idle .status-dot {
+  background: #22c55e;
+}
+
+.worker-status-badge.status-loading .status-dot {
+  background: #eab308;
+  animation: pulseDot 1.2s infinite ease-in-out;
+}
+
+.worker-status-badge.status-running .status-dot {
+  background: #38bdf8;
+  animation: pulseDot 0.8s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.term-action-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted, #8b949e);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+}
+
+.term-action-btn:hover {
+  background: var(--bg-tertiary, #21262d);
+  color: var(--text-bright, #f0f6fc);
+  border-color: var(--border-color, #30363d);
+}
+
+/* Terminal Body */
+.terminal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  background-color: #0e1117;
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.terminal-output-code {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #e2e8f0;
+  font-family: inherit;
+}
+
+.term-line-stdout,
+.term-line-stderr,
+.term-line-system,
+.term-line-success,
+.term-line-error {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.term-line-stdout {
+  color: #f1f5f9;
+}
+
+.term-line-stderr {
+  color: #f87171;
+}
+
+.term-line-system {
+  color: #38bdf8;
+  font-style: italic;
+}
+
+.term-line-success {
+  color: #4ade80;
+  font-weight: 500;
+}
+
+.term-line-error {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* --- Step-by-Step Debugger Layout & Controls (Lessons Reference) --- */
+.debug-controls-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-nav-btn {
+  background: var(--bg-tertiary, #21262d);
+  border: 1px solid var(--border-color, #30363d);
+  color: var(--text-main, #e6edf3);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.debug-nav-btn:hover:not(:disabled) {
+  background: #30363d;
+  color: #fff;
+  border-color: #8b949e;
+}
+
+.debug-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.debug-nav-btn.primary {
+  background: #1f6feb;
+  border-color: #388bfd;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.debug-nav-btn.primary:hover:not(:disabled) {
+  background: #388bfd;
+}
+
+.debug-nav-btn.exit {
+  background: transparent;
+  border-color: rgba(248, 81, 73, 0.4);
+  color: #f85149;
+}
+
+.debug-nav-btn.exit:hover {
+  background: rgba(248, 81, 73, 0.15);
+  border-color: #f85149;
+}
+
+.debug-step-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-bright, #f0f6fc);
+  background: #161b22;
+  border: 1px solid #30363d;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Debug View Body */
+.debug-view-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #0d1117;
+  overflow: hidden;
+}
+
+.debug-event-banner {
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #58a6ff;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-panels-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+
+.debug-vars-panel,
+.debug-output-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid #30363d;
+}
+
+.debug-output-panel {
+  border-right: none;
+}
+
+.debug-panel-title {
+  height: 28px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b949e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.debug-scope-badge {
+  background: #21262d;
+  color: #d29922;
+  border: 1px solid #d2992244;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.debug-vars-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.debug-var-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-bottom: 1px solid #21262d;
+  border-radius: 3px;
+}
+
+.debug-var-row:hover {
+  background: #161b22;
+}
+
+.debug-var-name-type {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.debug-var-name {
+  color: #79c0ff;
+  font-weight: 600;
+}
+
+.debug-var-type {
+  color: #8b949e;
+  font-size: 11px;
+}
+
+.debug-var-value {
+  color: #a5d6ff;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-step-stdout {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  background: #0d1117;
+  color: #7ee787;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-y: auto;
+}
+
+.debug-empty-hint {
+  color: #6e7681;
+  font-style: italic;
+  padding: 6px;
+}

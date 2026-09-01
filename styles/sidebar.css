@@ -1,0 +1,198 @@
+/* styles/sidebar.css - Project Explorer & File Tree */
+.ide-sidebar {
+  width: var(--sidebar-width);
+  min-width: 170px;
+  max-width: 480px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+.sidebar-header {
+  height: 35px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-header);
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Project Section Header */
+.sidebar-section-header {
+  height: 24px;
+  padding: 0 8px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.section-arrow {
+  color: var(--text-muted);
+  transform: rotate(90deg);
+  flex-shrink: 0;
+}
+
+.section-title-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-bright);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.section-tool-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.section-tool-btn:hover {
+  background: var(--bg-header);
+  color: var(--text-bright);
+}
+
+/* File Tree View */
+.file-explorer-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  box-sizing: border-box;
+  padding: 0 12px 0 16px;
+  cursor: pointer;
+  color: var(--text-main);
+  font-size: 13px;
+  transition: background 0.1s ease;
+  user-select: none;
+}
+
+.tree-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-bright);
+}
+
+.tree-item.active {
+  background: #37373d !important;
+  color: var(--text-bright) !important;
+  font-weight: 500;
+}
+
+.tree-item-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.tree-item-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.tree-item-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.tree-item:hover .tree-item-actions {
+  display: flex;
+}
+
+.tree-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 3px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tree-action-btn:hover {
+  background: var(--bg-header);
+  color: var(--text-bright);
+}
+
+.tree-action-btn.delete-file-btn:hover {
+  color: var(--accent-red);
+}
+
+/* Drag and Drop styles */
+.tree-item.dragging {
+  opacity: 0.4;
+}
+
+.tree-item.drag-target-folder {
+  background: rgba(88, 166, 255, 0.2) !important;
+  outline: 1px dashed #58a6ff;
+  border-radius: 3px;
+}
+
+.tree-item.drag-target-file {
+  background: rgba(88, 166, 255, 0.15) !important;
+  outline: 1px dashed rgba(88, 166, 255, 0.6);
+  border-radius: 3px;
+}
+
+.file-explorer-tree.drag-target-root {
+  background: rgba(88, 166, 255, 0.06);
+  outline: 1px dashed rgba(88, 166, 255, 0.4);
+  outline-offset: -2px;
+}

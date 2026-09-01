@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Python Интерактивный учебник & Песочница</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
   <!-- SEO & Primary Meta Tags -->
   <meta name="description" content="Интерактивный справочник, уроки и онлайн-песочница Python прямо в браузере.">
@@ -25,6 +26,7 @@
   <!-- Prism.js CSS Theme (Left Snippets Syntax Highlighting) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="styles/modal.css">
 
   <!-- Prism.js Syntax Highlighting Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
@@ -38,24 +40,46 @@
   <!-- Full-Page Interactive Python Snake & Particles Background Canvas -->
   <canvas id="bgCanvas" class="bg-canvas"></canvas>
 
+  <!-- Retro Snake Score & Record HUD -->
+  <div id="snakeHud" class="snake-hud" title="Интерактивная пасхалка: управляйте змейкой кнопками WASD / стрелочками, удерживайте Пробел для ускорения">
+    <div class="snake-hud-item">
+      <span class="snake-hud-icon">🍎</span>
+      <span class="snake-hud-label">Счёт:</span>
+      <span id="snakeCurrentScore" class="snake-hud-val score">0</span>
+    </div>
+    <div class="snake-hud-divider"></div>
+    <div class="snake-hud-item">
+      <span class="snake-hud-icon">🏆</span>
+      <span class="snake-hud-label">Рекорд:</span>
+      <span id="snakeHighScore" class="snake-hud-val record">0</span>
+    </div>
+    <div class="snake-hud-divider"></div>
+    <div class="snake-hud-hint">
+      <span class="snake-hud-key">WASD</span>
+      <span class="snake-hud-key">Space ⚡</span>
+    </div>
+  </div>
+
   <!-- Top App Navigation -->
   <header class="top-nav">
     <div class="nav-left">
       <a href="#" id="brandHomeLink" class="brand-link" title="На главную (Каталог тем)">
         <div class="brand-badge">
-          <svg class="brand-python-icon" viewBox="0 0 256 255" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+          <svg class="brand-python-icon" viewBox="0 -0.5 256 256" width="28" height="28" version="1.1" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
             <defs>
-              <linearGradient id="pyBlueGrad" x1="12.959%" y1="12.039%" x2="79.639%" y2="78.201%">
-                <stop offset="0%" stop-color="#387eb8"/>
-                <stop offset="100%" stop-color="#366994"/>
+              <linearGradient x1="12.9593594%" y1="12.0393928%" x2="79.6388325%" y2="78.2008538%" id="pyBlueGrad">
+                <stop stop-color="#387EB8" offset="0%"></stop>
+                <stop stop-color="#366994" offset="100%"></stop>
               </linearGradient>
-              <linearGradient id="pyYellowGrad" x1="19.128%" y1="20.579%" x2="90.742%" y2="88.429%">
-                <stop offset="0%" stop-color="#ffe052"/>
-                <stop offset="100%" stop-color="#ffc331"/>
+              <linearGradient x1="19.127525%" y1="20.5791813%" x2="90.7415328%" y2="88.4290372%" id="pyYellowGrad">
+                <stop stop-color="#FFE052" offset="0%"></stop>
+                <stop stop-color="#FFC331" offset="100%"></stop>
               </linearGradient>
             </defs>
-            <path d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631c-53.948 0-50.627 23.364-50.627 50.627 0 27.262 13.972 50.626 50.627 50.626h18.232v-24.975c0-30.825 25.438-30.825 25.438-30.825h59.083c27.263 0 27.263-25.438 27.263-25.438V28.187C171.647 28.187 175.77.072 126.916.072zm-34.114 19.588a11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13 11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.13z" fill="url(#pyBlueGrad)"/>
-            <path d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441c53.949 0 50.628-23.365 50.628-50.628 0-27.262-13.972-50.626-50.628-50.626h-18.232v24.975c0 30.825-25.438 30.825-25.438 30.825H111.32c-27.263 0-27.263 25.438-27.263 25.438v48.434c0 0-4.123 28.115 44.7 28.115zm34.114-19.586a11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.13 11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13z" fill="url(#pyYellowGrad)"/>
+            <g>
+              <path d="M126.915866,0.0722755491 C62.0835831,0.0722801733 66.1321288,28.1874648 66.1321288,28.1874648 L66.2044043,57.3145115 L128.072276,57.3145115 L128.072276,66.0598532 L41.6307171,66.0598532 C41.6307171,66.0598532 0.144551098,61.3549438 0.144551098,126.771315 C0.144546474,192.187673 36.3546019,189.867871 36.3546019,189.867871 L57.9649915,189.867871 L57.9649915,159.51214 C57.9649915,159.51214 56.8001363,123.302089 93.5968379,123.302089 L154.95878,123.302089 C154.95878,123.302089 189.434218,123.859386 189.434218,89.9830604 L189.434218,33.9695088 C189.434218,33.9695041 194.668541,0.0722755491 126.915866,0.0722755491 L126.915866,0.0722755491 L126.915866,0.0722755491 Z M92.8018069,19.6589497 C98.9572068,19.6589452 103.932242,24.6339846 103.932242,30.7893845 C103.932246,36.9447844 98.9572068,41.9198193 92.8018069,41.9198193 C86.646407,41.9198239 81.6713721,36.9447844 81.6713721,30.7893845 C81.6713674,24.6339846 86.646407,19.6589497 92.8018069,19.6589497 L92.8018069,19.6589497 L92.8018069,19.6589497 Z" fill="url(#pyBlueGrad)"></path>
+              <path d="M128.757101,254.126271 C193.589403,254.126271 189.540839,226.011081 189.540839,226.011081 L189.468564,196.884035 L127.600692,196.884035 L127.600692,188.138693 L214.042251,188.138693 C214.042251,188.138693 255.528417,192.843589 255.528417,127.427208 C255.52844,62.0108566 219.318366,64.3306589 219.318366,64.3306589 L197.707976,64.3306589 L197.707976,94.6863832 C197.707976,94.6863832 198.87285,130.896434 162.07613,130.896434 L100.714182,130.896434 C100.714182,130.896434 66.238745,130.339138 66.238745,164.215486 L66.238745,220.229038 C66.238745,220.229038 61.0044225,254.126271 128.757101,254.126271 L128.757101,254.126271 L128.757101,254.126271 Z M162.87116,234.539597 C156.715759,234.539597 151.740726,229.564564 151.740726,223.409162 C151.740726,217.253759 156.715759,212.278727 162.87116,212.278727 C169.026563,212.278727 174.001595,217.253759 174.001595,223.409162 C174.001618,229.564564 169.026563,234.539597 162.87116,234.539597 L162.87116,234.539597 L162.87116,234.539597 Z" fill="url(#pyYellowGrad)"></path>
+            </g>
           </svg>
         </div>
         <div class="brand-title">Python Interactive Lab</div>
@@ -78,6 +102,12 @@
     <div class="nav-right">
       <button id="hotkeysModalBtn" class="nav-btn hotkeys-btn" title="Список горячих клавиш">
         <span>⌨️</span> <span class="hotkeys-btn-label">Горячие клавиши</span>
+      </button>
+      <button id="sandboxModalBtn" class="nav-btn sandbox-btn" data-open-sandbox-modal title="Открыть изолированную песочницу Python">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="vscode-icon" style="flex-shrink:0;">
+          <path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .32 8.642L4.69 12 .32 15.358a1 1 0 0 0 .007 1.381l1.322 1.202c.38.345.94.37 1.276.057l4.12-3.128 9.46 8.63c.47.43 1.15.56 1.705.29l4.94-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z" fill="#007ACC"/>
+        </svg>
+        <span class="sandbox-btn-label">Открыть IDE</span>
       </button>
       <div class="engine-status" title="Статус интерактивной среды Python">
         <span id="statusDot" class="status-dot"></span>
@@ -145,7 +175,7 @@
               Открыть в IDE ↗
             </button>
           </div>
-          <pre id="heroTerminalOutput" class="sandbox-terminal-output">Нажмите «▶ Запустить», чтобы мгновенно выполнить Python код прямо в браузере...</pre>
+          <pre id="heroTerminalOutput" class="sandbox-terminal-output">Нажмите [▶ Запустить], чтобы мгновенно выполнить Python код прямо в браузере...</pre>
         </div>
       </div>
     </div>
@@ -196,17 +226,17 @@
     <section class="workspace-ide-pane">
       <div class="ide-header">
         <div class="ide-tab">
-          <span>🐍</span> main.py
+          <svg viewBox="0 -0.5 256 256" width="14" height="14" version="1.1" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid" style="vertical-align: -2px; display: inline-block;"><defs><linearGradient id="pyLessonTabB" x1="12.959%" y1="12.039%" x2="79.639%" y2="78.201%"><stop stop-color="#387EB8" offset="0%"/><stop stop-color="#366994" offset="100%"/></linearGradient><linearGradient id="pyLessonTabY" x1="19.128%" y1="20.579%" x2="90.742%" y2="88.429%"><stop stop-color="#FFE052" offset="0%"/><stop stop-color="#FFC331" offset="100%"/></linearGradient></defs><g><path d="M126.915866,0.0722755491 C62.0835831,0.0722801733 66.1321288,28.1874648 66.1321288,28.1874648 L66.2044043,57.3145115 L128.072276,57.3145115 L128.072276,66.0598532 L41.6307171,66.0598532 C41.6307171,66.0598532 0.144551098,61.3549438 0.144551098,126.771315 C0.144546474,192.187673 36.3546019,189.867871 36.3546019,189.867871 L57.9649915,189.867871 L57.9649915,159.51214 C57.9649915,159.51214 56.8001363,123.302089 93.5968379,123.302089 L154.95878,123.302089 C154.95878,123.302089 189.434218,123.859386 189.434218,89.9830604 L189.434218,33.9695088 C189.434218,33.9695041 194.668541,0.0722755491 126.915866,0.0722755491 L126.915866,0.0722755491 L126.915866,0.0722755491 Z M92.8018069,19.6589497 C98.9572068,19.6589452 103.932242,24.6339846 103.932242,30.7893845 C103.932246,36.9447844 98.9572068,41.9198193 92.8018069,41.9198193 C86.646407,41.9198239 81.6713721,36.9447844 81.6713721,30.7893845 C81.6713674,24.6339846 86.646407,19.6589497 92.8018069,19.6589497 L92.8018069,19.6589497 L92.8018069,19.6589497 Z" fill="url(#pyLessonTabB)"/><path d="M128.757101,254.126271 C193.589403,254.126271 189.540839,226.011081 189.540839,226.011081 L189.468564,196.884035 L127.600692,196.884035 L127.600692,188.138693 L214.042251,188.138693 C214.042251,188.138693 255.528417,192.843589 255.528417,127.427208 C255.52844,62.0108566 219.318366,64.3306589 219.318366,64.3306589 L197.707976,64.3306589 L197.707976,94.6863832 C197.707976,94.6863832 198.87285,130.896434 162.07613,130.896434 L100.714182,130.896434 C100.714182,130.896434 66.238745,130.339138 66.238745,164.215486 L66.238745,220.229038 C66.238745,220.229038 61.0044225,254.126271 128.757101,254.126271 L128.757101,254.126271 L128.757101,254.126271 Z M162.87116,234.539597 C156.715759,234.539597 151.740726,229.564564 151.740726,223.409162 C151.740726,217.253759 156.715759,212.278727 162.87116,212.278727 C169.026563,212.278727 174.001595,217.253759 174.001595,223.409162 C174.001618,229.564564 169.026563,234.539597 162.87116,234.539597 L162.87116,234.539597 L162.87116,234.539597 Z" fill="url(#pyLessonTabY)"/></g></svg> main.py
         </div>
         <div class="ide-actions">
           <div id="ideSaveIndicator" class="ide-save-indicator" title="Код сохраняется в браузере автоматически">
             <span>💾</span> <span>Сохранено</span>
           </div>
           <button id="formatCodeBtn" class="ide-format-btn" title="Форматировать код по стандарту PEP 8">
-            <span>🪄</span> Форматировать
+            <span>🪄</span> Формат
           </button>
           <button id="stepDebugBtn" class="ide-step-btn" disabled title="Пошаговая визуализация выполнения">
-            <span>👣</span> По шагам
+            <span>🪲</span> Отладка
           </button>
           <button id="resetCodeBtn" class="ide-reset-btn" title="Вернуть исходный пример">
             <span>🔄</span> Сбросить
@@ -340,16 +370,16 @@
         <div class="shortcuts-group">
           <div class="shortcuts-group-title">Интерактивная змейка (Главный экран)</div>
           <div class="shortcut-row">
+            <span class="shortcut-desc">Управление движением</span>
+            <div class="shortcut-keys"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <span class="shortcut-or">или</span> <kbd>↑</kbd> <kbd>←</kbd> <kbd>↓</kbd> <kbd>→</kbd></div>
+          </div>
+          <div class="shortcut-row">
             <span class="shortcut-desc">Турбо-ускорение</span>
-            <div class="shortcut-keys"><kbd>ПКМ</kbd> (зажать)</div>
+            <div class="shortcut-keys"><kbd>Пробел</kbd></div>
           </div>
           <div class="shortcut-row">
             <span class="shortcut-desc">Сбросить яблочки</span>
             <div class="shortcut-keys"><kbd>ЛКМ</kbd></div>
-          </div>
-          <div class="shortcut-row">
-            <span class="shortcut-desc">Ручное управление направлением</span>
-            <div class="shortcut-keys"><kbd>Движение мыши</kbd></div>
           </div>
         </div>
       </div>
@@ -400,5 +430,6 @@
   <!-- App Logic Scripts -->
   <script src="topics.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="js/projectModal.js"></script>
 </body>
 </html>
