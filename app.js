@@ -1,14 +1,13 @@
 // Application State
-let pyodideInstance = null;
-let isPyodideLoading = false;
+import { WorkerBridge } from "./js/worker/workerBridge.js";
+import { PythonWebIDEApp } from "./js/app.js";
+import { courseSdk } from "./js/core/courseSdk.js";
+import { toast } from "./js/ui/components/toast.js";
+
+const workerBridge = new WorkerBridge();
 let currentTopic = null;
 let currentExampleCode = "";
-let monacoEditor = null;
-let debugDecorations = [];
-let debugSteps = [];
-let currentDebugIndex = 0;
-let isDebugActive = false;
-let autoSaveTimeout = null;
+let embeddedIDE = null;
 
 // LocalStorage Keys
 const STORAGE_KEY_COMPLETED = "learn_py_completed_topics";
@@ -33,25 +32,13 @@ const ideSaveIndicator = document.getElementById("ideSaveIndicator");
 const theoryBlock = document.getElementById("theoryBlock");
 const snippetsList = document.getElementById("snippetsList");
 const runIdeBtn = document.getElementById("runIdeBtn");
+const stopIdeBtn = document.getElementById("stopIdeBtn");
 const stepDebugBtn = document.getElementById("stepDebugBtn");
 const resetCodeBtn = document.getElementById("resetCodeBtn");
 const formatCodeBtn = document.getElementById("formatCodeBtn");
 const clearTermBtn = document.getElementById("clearTermBtn");
 const terminalBody = document.getElementById("terminalBody");
 const terminalTitleText = document.getElementById("terminalTitleText");
-const debugControls = document.getElementById("debugControls");
-const debugFirstBtn = document.getElementById("debugFirstBtn");
-const debugPrevBtn = document.getElementById("debugPrevBtn");
-const debugNextBtn = document.getElementById("debugNextBtn");
-const debugLastBtn = document.getElementById("debugLastBtn");
-const debugExitBtn = document.getElementById("debugExitBtn");
-const debugStepInfo = document.getElementById("debugStepInfo");
-const debugViewBody = document.getElementById("debugViewBody");
-const debugEventIcon = document.getElementById("debugEventIcon");
-const debugEventText = document.getElementById("debugEventText");
-const debugScopeBadge = document.getElementById("debugScopeBadge");
-const debugVarsContainer = document.getElementById("debugVarsContainer");
-const debugOutputText = document.getElementById("debugOutputText");
 const globalSearchBtn = document.getElementById("globalSearchBtn");
 const searchPaletteModal = document.getElementById("searchPaletteModal");
 const paletteSearchInput = document.getElementById("paletteSearchInput");
@@ -113,15 +100,9 @@ function closeCustomInputModal(isCancelled = false, value = "") {
 let activePaletteIndex = 0;
 let paletteResults = [];
 
-// LocalStorage Helpers
+// Course SDK / Storage Integration
 function getCompletedTopics() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_COMPLETED);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    console.error("Error reading completed topics:", e);
-    return [];
-  }
+  return courseSdk.getCompletedTopicIds();
 }
 
 function setCompletedTopics(list) {
@@ -133,47 +114,33 @@ function setCompletedTopics(list) {
 }
 
 function isTopicCompleted(topicId) {
-  return getCompletedTopics().includes(topicId);
+  return courseSdk.isTopicCompleted(topicId);
 }
 
 function toggleTopicCompleted(topicId) {
-  const completed = getCompletedTopics();
-  const idx = completed.indexOf(topicId);
-  if (idx >= 0) {
-    completed.splice(idx, 1);
-  } else {
-    completed.push(topicId);
-  }
-  setCompletedTopics(completed);
+  const isCompleted = courseSdk.toggleTopicCompleted(topicId);
   updateProgressUI();
-  return completed.includes(topicId);
+  if (isCompleted) {
+    toast.success("Тема отмечена как пройденная");
+  } else {
+    toast.info("Тема снята с отмеченных");
+  }
+  return isCompleted;
 }
 
 function getSavedTopicCode(topicId) {
-  try {
-    return localStorage.getItem(STORAGE_KEY_TOPIC_CODE_PREFIX + topicId);
-  } catch (e) {
-    return null;
-  }
+  return courseSdk.getSavedTopicCode(topicId);
 }
 
 function saveTopicCode(topicId, code) {
-  try {
-    if (topicId) {
-      localStorage.setItem(STORAGE_KEY_TOPIC_CODE_PREFIX + topicId, code);
-      showSaveStatus();
-    }
-  } catch (e) {
-    console.error("Error saving topic code:", e);
+  if (topicId) {
+    courseSdk.saveTopicCode(topicId, code);
+    showSaveStatus();
   }
 }
 
 function removeSavedTopicCode(topicId) {
-  try {
-    localStorage.removeItem(STORAGE_KEY_TOPIC_CODE_PREFIX + topicId);
-  } catch (e) {
-    console.error("Error clearing saved topic code:", e);
-  }
+  courseSdk.clearSavedTopicCode(topicId);
 }
 
 function showSaveStatus() {
@@ -239,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initBackgroundCanvas();
   initHeroSandbox();
   initHeroMatrixConstellation();
-  initMonacoEditor();
+  initEmbeddedIDE();
   setupEventListeners();
   initSearchPalette();
   initTerminalResizer();
@@ -263,223 +230,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// Setup Monaco Editor (Right Pane IDE)
-function initMonacoEditor() {
-  const container = document.getElementById("monacoEditorContainer");
-  if (!container) return;
+// Setup Embedded Modular Python IDE
+async function initEmbeddedIDE() {
+  if (!embeddedIDE) {
+    embeddedIDE = new PythonWebIDEApp({
+      mode: 'embedded',
+      collapseSidebarOnInit: true
+    });
+    await embeddedIDE.init();
 
-  if (typeof require === "undefined") {
-    console.error("Monaco loader is not available");
-    return;
-  }
-
-  require.config({
-    paths: {
-      vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs"
+    if (currentTopic) {
+      const savedCode = getSavedTopicCode(currentTopic.id);
+      const initialCode = (savedCode !== null && savedCode !== undefined)
+        ? savedCode
+        : (currentTopic.examples && currentTopic.examples.length > 0 ? currentTopic.examples[0].code : null);
+      await embeddedIDE.openTopicProject(currentTopic.id, currentTopic.title, initialCode);
     }
-  });
-
-  require(["vs/editor/editor.main"], function () {
-    // Register Custom Python Autocompletion Provider
-    monaco.languages.registerCompletionItemProvider("python", {
-      provideCompletionItems: function (model, position) {
-        const word = model.getWordUntilPosition(position);
-        const range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn
-        };
-
-        const keywords = [
-          "and", "as", "assert", "async", "await", "break", "class", "continue", "def",
-          "del", "elif", "else", "except", "finally", "for", "from", "global", "if",
-          "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise",
-          "return", "try", "while", "with", "yield", "True", "False", "None"
-        ];
-
-        const builtins = [
-          "abs", "all", "any", "ascii", "bin", "bool", "breakpoint", "bytearray", "bytes",
-          "callable", "chr", "classmethod", "compile", "complex", "delattr", "dict", "dir",
-          "divmod", "enumerate", "eval", "exec", "filter", "float", "format", "frozenset",
-          "getattr", "globals", "hasattr", "hash", "help", "hex", "id", "input", "int",
-          "isinstance", "issubclass", "iter", "len", "list", "locals", "map", "max",
-          "memoryview", "min", "next", "object", "oct", "open", "ord", "pow", "print",
-          "property", "range", "repr", "reversed", "round", "set", "setattr", "slice",
-          "sorted", "staticmethod", "str", "sum", "super", "tuple", "type", "vars", "zip"
-        ];
-
-        const methods = [
-          "append", "extend", "insert", "remove", "pop", "clear", "index", "count", "sort",
-          "reverse", "copy", "get", "keys", "values", "items", "update", "split", "join",
-          "replace", "strip", "lstrip", "rstrip", "lower", "upper", "title", "capitalize",
-          "startswith", "endswith", "find", "rfind", "isdigit", "isalpha", "isalnum", "add",
-          "discard", "union", "intersection", "difference", "symmetric_difference", "read",
-          "write", "readline", "readlines", "close", "format", "encode", "decode"
-        ];
-
-        const suggestions = [];
-
-        keywords.forEach((k) => {
-          suggestions.push({
-            label: k,
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: k,
-            detail: "keyword",
-            range: range
-          });
-        });
-
-        builtins.forEach((b) => {
-          suggestions.push({
-            label: b,
-            kind: monaco.languages.CompletionItemKind.Function,
-            insertText: b === 'print' ? 'print($0)' : `${b}($0)`,
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: "builtin function",
-            range: range
-          });
-        });
-
-        methods.forEach((m) => {
-          suggestions.push({
-            label: m,
-            kind: monaco.languages.CompletionItemKind.Method,
-            insertText: `${m}($0)`,
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: "method",
-            range: range
-          });
-        });
-
-        // Snippets
-        suggestions.push(
-          {
-            label: 'def',
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: ['def ${1:func_name}(${2:params}):', '\t${0:pass}'].join('\n'),
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'function definition snippet',
-            range: range
-          },
-          {
-            label: 'class',
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: ['class ${1:ClassName}:', '\tdef __init__(self${2:, params}):', '\t\t${0:pass}'].join('\n'),
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'class definition snippet',
-            range: range
-          },
-          {
-            label: 'ifmain',
-            kind: monaco.languages.CompletionItemKind.Snippet,
-            insertText: ['if __name__ == "__main__":', '\t${0:main()}'].join('\n'),
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'if __name__ == "__main__" boilerplate',
-            range: range
-          }
-        );
-
-        return { suggestions: suggestions };
-      }
-    });
-
-    // Define GitHub Dark Theme
-    monaco.editor.defineTheme("github-dark", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [
-        { token: "comment", foreground: "8b949e", fontStyle: "italic" },
-        { token: "keyword", foreground: "ff7b72" },
-        { token: "string", foreground: "a5d6ff" },
-        { token: "number", foreground: "79c0ff" },
-        { token: "type", foreground: "ffa657" },
-        { token: "type.identifier", foreground: "ffa657" },
-        { token: "function", foreground: "d2a8ff" },
-        { token: "identifier", foreground: "e6edf3" },
-        { token: "delimiter", foreground: "79c0ff" },
-        { token: "operator", foreground: "79c0ff" }
-      ],
-      colors: {
-        "editor.background": "#0d1117",
-        "editor.foreground": "#c9d1d9",
-        "editorCursor.foreground": "#58a6ff",
-        "editor.lineHighlightBackground": "#161b2280",
-        "editorLineNumber.foreground": "#6e7681",
-        "editorLineNumber.activeForeground": "#f0f6fc",
-        "editor.selectionBackground": "#1f6feb40",
-        "editor.inactiveSelectionBackground": "#1f6feb20",
-        "editorGutter.background": "#0d1117",
-        "editorIndentGuide.background": "#21262d",
-        "editorIndentGuide.activeBackground": "#30363d",
-        "minimap.background": "#0d1117"
-      }
-    });
-
-    // Create Monaco Editor Instance
-    monacoEditor = monaco.editor.create(container, {
-      value: `# Добро пожаловать в Python Interactive Lab!
-# Выберите тему слева или напишите любой свой код здесь:
-
-def greet(name):
-    return f"Привет, {name}! Готов изучать Python?"
-
-print(greet("Разработчик"))
-`,
-      language: "python",
-      theme: "github-dark",
-      fontSize: 14,
-      fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
-      tabSize: 4,
-      insertSpaces: true,
-      automaticLayout: true,
-      scrollBeyondLastLine: false,
-      minimap: {
-        enabled: true
-      },
-      renderLineHighlight: "all",
-      lineNumbers: "on",
-      bracketPairColorization: {
-        enabled: true
-      },
-      formatOnPaste: true,
-      wordWrap: "on",
-      quickSuggestions: { other: true, comments: true, strings: true },
-      suggestOnTriggerCharacters: true,
-      acceptSuggestionOnEnter: "on",
-      tabCompletion: "on",
-      wordBasedSuggestions: "allDocuments",
-      suggestSelection: "first"
-    });
-
-    // Shortcuts inside Monaco
-    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () {
-      runIdeCode();
-    });
-
-    monacoEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, function () {
-      formatIdeCode();
-    });
-
-    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyL, function () {
-      formatIdeCode();
-    });
-
-    // Auto-save user code on change (debounced 400ms)
-    monacoEditor.onDidChangeModelContent(() => {
-      if (ideSaveIndicator) {
-        ideSaveIndicator.classList.remove("saved");
-        ideSaveIndicator.classList.add("saving");
-        ideSaveIndicator.innerHTML = `<span>⏳</span> <span>Сохранение...</span>`;
-      }
-      clearTimeout(autoSaveTimeout);
-      autoSaveTimeout = setTimeout(() => {
-        if (currentTopic && monacoEditor) {
-          saveTopicCode(currentTopic.id, monacoEditor.getValue());
-        }
-      }, 400);
-    });
-  });
+  }
 }
 
 // Render Catalog Grid View
@@ -734,29 +501,28 @@ function openTopicWorkspace(topicId, updateHash = true) {
     snippetsList.appendChild(card);
   });
 
-  // Preload saved user code or first example into CodeMirror IDE
+  // Load or switch to the topic's isolated project in embedded IDE
   const savedCode = getSavedTopicCode(topic.id);
-  if (savedCode !== null && savedCode !== undefined) {
-    currentExampleCode = topic.examples.length > 0 ? topic.examples[0].code : "";
-    loadCodeIntoIde(savedCode, false);
-  } else if (topic.examples.length > 0) {
-    currentExampleCode = topic.examples[0].code;
-    loadCodeIntoIde(currentExampleCode, true);
+  const initialCode = (savedCode !== null && savedCode !== undefined)
+    ? savedCode
+    : (topic.examples && topic.examples.length > 0 ? topic.examples[0].code : null);
+
+  if (embeddedIDE) {
+    embeddedIDE.openTopicProject(topic.id, topic.title, initialCode);
   }
 
-  // Refresh Monaco layout
+  // Refresh IDE layout
   setTimeout(() => {
-    if (monacoEditor) {
-      monacoEditor.layout();
+    if (embeddedIDE && embeddedIDE.editor && embeddedIDE.editor.editorInstance) {
+      embeddedIDE.editor.editorInstance.layout();
     }
   }, 50);
 }
 
 // Load code into right IDE pane
 function loadCodeIntoIde(code, saveToStorage = true) {
-  if (monacoEditor) {
-    monacoEditor.setValue(code);
-    monacoEditor.focus();
+  if (embeddedIDE) {
+    embeddedIDE.setCode(code);
   }
   if (saveToStorage && currentTopic) {
     saveTopicCode(currentTopic.id, code);
@@ -777,185 +543,135 @@ function showCatalogView(updateHash = true) {
   } catch (e) {}
 }
 
-// Execute Python Code via Pyodide
-async function executePythonCode(code) {
-  if (!pyodideInstance) {
-    await initPyodide();
-    if (!pyodideInstance) {
-      return { success: false, error: "Pyodide еще не загрузился, повторите через секунду." };
-    }
-  }
-
-  try {
-    pyodideInstance.globals.set("__user_code__", code);
-
-    const runnerScript = `
-import sys
-import io
-import traceback
-import builtins
-import js
-import ast
-
-sys.stdout = io.StringIO()
-sys.stderr = sys.stdout
-
-__execution_success__ = True
-__execution_error__ = ""
-
-async def __custom_async_input__(prompt=""):
-    prompt_str = str(prompt) if prompt is not None else ""
-    if prompt_str:
-        sys.stdout.write(prompt_str)
-    try:
-        val = await js.showCustomInputModal(prompt_str)
-        val_str = str(val)
-        sys.stdout.write(val_str + "\\n")
-        return val_str
-    except Exception:
-        raise EOFError("Ввод отменен пользователем")
-
-builtins.input = __custom_async_input__
-builtins.__custom_async_input__ = __custom_async_input__
-
-class __InputTransformer__(ast.NodeTransformer):
-    def visit_Call(self, node):
-        self.generic_visit(node)
-        if isinstance(node.func, ast.Name) and node.func.id == "input":
-            return ast.Await(
-                value=ast.Call(
-                    func=ast.Name(id="__custom_async_input__", ctx=ast.Load()),
-                    args=node.args,
-                    keywords=node.keywords
-                )
-            )
-        return node
-
-try:
-    __parsed_tree__ = ast.parse(__user_code__, "main.py")
-    __has_input__ = False
-    for node in ast.walk(__parsed_tree__):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "input":
-            __has_input__ = True
-            break
-
-    if __has_input__:
-        __transformer__ = __InputTransformer__()
-        __transformed_tree__ = __transformer__.visit(__parsed_tree__)
-        ast.fix_missing_locations(__transformed_tree__)
-
-        __wrapper_func__ = ast.AsyncFunctionDef(
-            name="__async_user_main__",
-            args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
-            body=__transformed_tree__.body,
-            decorator_list=[]
-        )
-        __transformed_tree__.body = [__wrapper_func__]
-        ast.fix_missing_locations(__transformed_tree__)
-
-        __compiled__ = compile(__transformed_tree__, "main.py", "exec")
-        __user_globals__ = {"__name__": "__main__"}
-        exec(__compiled__, __user_globals__)
-        await __user_globals__["__async_user_main__"]()
-    else:
-        __compiled_code__ = compile(__user_code__, "main.py", "exec")
-        __user_globals__ = {"__name__": "__main__"}
-        exec(__compiled_code__, __user_globals__)
-except SystemExit:
-    pass
-except BaseException:
-    __execution_success__ = False
-    __execution_error__ = traceback.format_exc()
-
-__execution_output__ = sys.stdout.getvalue()
-`;
-
+// Execute Python Code via Web Worker Bridge
+function executePythonCode(code) {
+  return new Promise((resolve) => {
+    let outputText = "";
+    let errorText = "";
     const startTime = performance.now();
-    await pyodideInstance.runPythonAsync(runnerScript);
-    const duration = (performance.now() - startTime).toFixed(1);
 
-    const success = pyodideInstance.globals.get("__execution_success__");
-    const output = pyodideInstance.globals.get("__execution_output__");
-    const errorText = pyodideInstance.globals.get("__execution_error__");
+    const onStdout = (e) => {
+      outputText += e.detail;
+    };
+    const onStderr = (e) => {
+      errorText += e.detail;
+    };
 
-    if (!success) {
-      return {
-        success: false,
-        output: output || "",
-        error: errorText,
-        duration
-      };
-    }
+    const cleanup = () => {
+      workerBridge.removeEventListener("stdout", onStdout);
+      workerBridge.removeEventListener("stderr", onStderr);
+      workerBridge.removeEventListener("finished", onFinished);
+    };
 
-    return { success: true, output: output, duration };
-  } catch (err) {
-    let errorMsg = err.message || String(err);
-    if (err.stack && !errorMsg.includes("Traceback")) {
-      errorMsg = `${errorMsg}\n${err.stack}`;
-    }
-    return { success: false, error: errorMsg };
-  }
+    const onFinished = (e) => {
+      cleanup();
+      const duration = (performance.now() - startTime).toFixed(1);
+      if (e.detail.success) {
+        resolve({ success: true, output: outputText, duration });
+      } else {
+        resolve({
+          success: false,
+          output: outputText,
+          error: errorText || e.detail.error || "Ошибка выполнения",
+          duration
+        });
+      }
+    };
+
+    workerBridge.addEventListener("stdout", onStdout);
+    workerBridge.addEventListener("stderr", onStderr);
+    workerBridge.addEventListener("finished", onFinished);
+
+    workerBridge.run({ "/main.py": code }, "/main.py");
+  });
 }
 
-// Run code from right IDE
-async function runIdeCode() {
+// Run code from right IDE via Web Worker
+function runIdeCode() {
   if (!monacoEditor) return;
   const code = monacoEditor.getValue().trim();
   if (!code) return;
 
   terminalBody.classList.remove("empty");
   terminalBody.textContent = "⏳ Выполняется...\n";
-  runIdeBtn.disabled = true;
-
-  const res = await executePythonCode(code);
-
-  if (res.success) {
-    const text = res.output || "(Программа выполнена успешно без вывода в консоль)";
-    terminalBody.innerHTML = `<span class="term-info">▶ Выполнено за ${res.duration} мс:</span>\n${escapeHtml(text)}`;
-  } else {
-    let html = "";
-    if (res.output && res.output.trim()) {
-      html += `<span class="term-info">▶ Вывод до возникновения ошибки:</span>\n${escapeHtml(res.output)}\n\n`;
-    }
-    html += `<span class="term-error">❌ Ошибка выполнения:\n${escapeHtml(res.error || "Неизвестная ошибка")}</span>`;
-    terminalBody.innerHTML = html;
+  runIdeBtn.style.display = "none";
+  if (stopIdeBtn) {
+    stopIdeBtn.style.display = "inline-flex";
   }
 
-  terminalBody.scrollTop = terminalBody.scrollHeight;
-  runIdeBtn.disabled = false;
+  const startTime = performance.now();
+  let stdoutBuffer = "";
+  let stderrBuffer = "";
+
+  const onStdout = (e) => {
+    stdoutBuffer += e.detail;
+    terminalBody.textContent = stdoutBuffer + (stderrBuffer ? "\n" + stderrBuffer : "");
+    terminalBody.scrollTop = terminalBody.scrollHeight;
+  };
+
+  const onStderr = (e) => {
+    stderrBuffer += e.detail;
+    terminalBody.textContent = stdoutBuffer + (stderrBuffer ? "\n" + stderrBuffer : "");
+    terminalBody.scrollTop = terminalBody.scrollHeight;
+  };
+
+  const cleanup = () => {
+    workerBridge.removeEventListener("stdout", onStdout);
+    workerBridge.removeEventListener("stderr", onStderr);
+    workerBridge.removeEventListener("finished", onFinished);
+    if (stopIdeBtn) {
+      stopIdeBtn.style.display = "none";
+    }
+    runIdeBtn.style.display = "inline-flex";
+    runIdeBtn.disabled = false;
+  };
+
+  const onFinished = (e) => {
+    cleanup();
+    const duration = (performance.now() - startTime).toFixed(1);
+
+    if (e.detail.success) {
+      const text = stdoutBuffer || "(Программа выполнена успешно без вывода в консоль)";
+      terminalBody.innerHTML = `<span class="term-info">▶ Выполнено за ${duration} мс:</span>\n${escapeHtml(text)}`;
+    } else {
+      let html = "";
+      if (stdoutBuffer && stdoutBuffer.trim()) {
+        html += `<span class="term-info">▶ Вывод до остановки:</span>\n${escapeHtml(stdoutBuffer)}\n\n`;
+      }
+      const err = e.detail.terminated
+        ? "[Процесс принудительно остановлен пользователем]"
+        : (stderrBuffer || e.detail.error || "Неизвестная ошибка");
+      html += `<span class="term-error">❌ ${escapeHtml(err)}</span>`;
+      terminalBody.innerHTML = html;
+    }
+    terminalBody.scrollTop = terminalBody.scrollHeight;
+  };
+
+  workerBridge.addEventListener("stdout", onStdout);
+  workerBridge.addEventListener("stderr", onStderr);
+  workerBridge.addEventListener("finished", onFinished);
+
+  workerBridge.run({ "/main.py": code }, "/main.py");
 }
 
-// Initialize Pyodide WebAssembly
-async function initPyodide() {
-  if (pyodideInstance || isPyodideLoading) return;
-  isPyodideLoading = true;
-  updateStatus("loading");
+// Initialize Pyodide Web Worker Runner
+function initPyodide() {
+  workerBridge.addEventListener("status", (e) => {
+    updateStatus(e.detail.status);
+  });
 
-  try {
-    if (typeof loadPyodide === "undefined") {
-      throw new Error("Среда Python временно недоступна");
+  workerBridge.addEventListener("request-input", async (e) => {
+    const { id, prompt } = e.detail;
+    try {
+      const val = await window.showCustomInputModal(prompt);
+      workerBridge.sendInputResponse(id, val, false);
+    } catch (err) {
+      workerBridge.sendInputResponse(id, null, true);
     }
+  });
 
-    pyodideInstance = await loadPyodide();
-    pyodideInstance.setStdin({
-      stdin: () => {
-        const input = window.prompt("Введите значение (input):");
-        return input !== null ? input + "\n" : null;
-      }
-    });
-    await pyodideInstance.loadPackage("micropip");
-    const micropip = pyodideInstance.pyimport("micropip");
-    await micropip.install("autopep8");
-
-    updateStatus("ready");
-    runIdeBtn.disabled = false;
-    stepDebugBtn.disabled = false;
-  } catch (err) {
-    console.error("Ошибка загрузки среды Python / Pyodide:", err);
-    updateStatus("error");
-  } finally {
-    isPyodideLoading = false;
-  }
+  workerBridge.initWorker();
+  updateStatus(workerBridge.status || "loading");
 }
 
 function updateStatus(state) {
@@ -965,6 +681,14 @@ function updateStatus(state) {
   }
   if (statusDot) {
     statusDot.className = `status-dot ${state}`;
+  }
+
+  if (state === "ready") {
+    if (runIdeBtn && !workerBridge.isRunning) runIdeBtn.disabled = false;
+    if (stepDebugBtn && !workerBridge.isRunning) stepDebugBtn.disabled = false;
+  } else if (state === "loading") {
+    if (runIdeBtn) runIdeBtn.disabled = true;
+    if (stepDebugBtn) stepDebugBtn.disabled = true;
   }
 }
 
@@ -983,29 +707,17 @@ function setupEventListeners() {
     });
   }
 
-  runIdeBtn.addEventListener("click", () => {
-    if (isDebugActive) exitDebugMode();
-    runIdeCode();
-  });
-
-  if (stepDebugBtn) {
-    stepDebugBtn.addEventListener("click", runStepByStepDebug);
+  if (runIdeBtn) {
+    runIdeBtn.addEventListener("click", () => {
+      if (isDebugActive) exitDebugMode();
+      runIdeCode();
+    });
   }
 
-  if (debugFirstBtn) {
-    debugFirstBtn.addEventListener("click", () => goToDebugStep(0));
-  }
-  if (debugPrevBtn) {
-    debugPrevBtn.addEventListener("click", () => goToDebugStep(currentDebugIndex - 1));
-  }
-  if (debugNextBtn) {
-    debugNextBtn.addEventListener("click", () => goToDebugStep(currentDebugIndex + 1));
-  }
-  if (debugLastBtn) {
-    debugLastBtn.addEventListener("click", () => goToDebugStep(debugSteps.length - 1));
-  }
-  if (debugExitBtn) {
-    debugExitBtn.addEventListener("click", exitDebugMode);
+  if (stopIdeBtn) {
+    stopIdeBtn.addEventListener("click", () => {
+      workerBridge.terminate();
+    });
   }
 
   if (topicCompleteBtn) {
@@ -1016,23 +728,29 @@ function setupEventListeners() {
     });
   }
 
-  resetCodeBtn.addEventListener("click", () => {
-    if (isDebugActive) exitDebugMode();
-    if (currentExampleCode && currentTopic) {
-      removeSavedTopicCode(currentTopic.id);
-      loadCodeIntoIde(currentExampleCode, false);
-      showSaveStatus();
-    }
-  });
+  if (resetCodeBtn) {
+    resetCodeBtn.addEventListener("click", () => {
+      if (isDebugActive) exitDebugMode();
+      if (currentExampleCode && currentTopic) {
+        removeSavedTopicCode(currentTopic.id);
+        loadCodeIntoIde(currentExampleCode, false);
+        showSaveStatus();
+      }
+    });
+  }
 
   if (formatCodeBtn) {
     formatCodeBtn.addEventListener("click", formatIdeCode);
   }
 
-  clearTermBtn.addEventListener("click", () => {
-    terminalBody.textContent = "Консоль очищена.";
-    terminalBody.classList.add("empty");
-  });
+  if (clearTermBtn) {
+    clearTermBtn.addEventListener("click", () => {
+      if (terminalBody) {
+        terminalBody.textContent = "Консоль очищена.";
+        terminalBody.classList.add("empty");
+      }
+    });
+  }
 
   // Hotkeys Modal
   if (hotkeysModalBtn && hotkeysModal) {
@@ -1090,111 +808,11 @@ function setupEventListeners() {
         hotkeysModal.style.display = "none";
         return;
       }
-      if (isDebugActive) {
-        e.preventDefault();
-        exitDebugMode();
-        return;
-      }
       if (workspaceView.classList.contains("active")) {
         showCatalogView();
       }
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      if (workspaceView.classList.contains("active")) {
-        e.preventDefault();
-        if (isDebugActive) exitDebugMode();
-        runIdeCode();
-      }
-    }
-    // F10 or Shift+F10 for Debugging
-    if (e.key === "F10" && workspaceView.classList.contains("active")) {
-      e.preventDefault();
-      if (!isDebugActive) {
-        runStepByStepDebug();
-      } else {
-        if (e.shiftKey) {
-          goToDebugStep(currentDebugIndex - 1);
-        } else {
-          goToDebugStep(currentDebugIndex + 1);
-        }
-      }
-    }
-    // Left/Right Arrow Navigation during active debug
-    if (isDebugActive && (e.target === document.body || e.target.closest("#workspaceView"))) {
-      if (e.key === "ArrowRight" && !e.target.closest(".monaco-editor")) {
-        goToDebugStep(currentDebugIndex + 1);
-      } else if (e.key === "ArrowLeft" && !e.target.closest(".monaco-editor")) {
-        goToDebugStep(currentDebugIndex - 1);
-      }
-    }
-    // Shift+Alt+F or Ctrl+Alt+L
-    if ((e.shiftKey && e.altKey && e.code === "KeyF") || (e.ctrlKey && e.altKey && e.code === "KeyL")) {
-      if (workspaceView.classList.contains("active")) {
-        e.preventDefault();
-        formatIdeCode();
-      }
-    }
   });
-}
-
-// Format Python Code in IDE
-async function formatIdeCode() {
-  if (!monacoEditor) return;
-  const code = monacoEditor.getValue();
-  if (!code.trim()) return;
-
-  if (!pyodideInstance) {
-    await initPyodide();
-    if (!pyodideInstance) {
-      alert("Pyodide еще загружается, подождите секунду.");
-      return;
-    }
-  }
-
-  const origBtnText = formatCodeBtn ? formatCodeBtn.innerHTML : "";
-  if (formatCodeBtn) {
-    formatCodeBtn.innerHTML = "<span>⏳</span> Форматирование...";
-    formatCodeBtn.disabled = true;
-  }
-
-  try {
-    pyodideInstance.globals.set("__raw_code__", code);
-
-    const formatScript = `
-import autopep8
-
-__formatted_result__ = ""
-__format_error__ = ""
-
-try:
-    __formatted_result__ = autopep8.fix_code(__raw_code__)
-except Exception as e:
-    __format_error__ = str(e)
-`;
-
-    await pyodideInstance.runPythonAsync(formatScript);
-    const formatError = pyodideInstance.globals.get("__format_error__");
-    const formattedResult = pyodideInstance.globals.get("__formatted_result__");
-
-    if (formatError) {
-      terminalBody.classList.remove("empty");
-      terminalBody.innerHTML = `<span class="term-error">⚠️ Ошибка форматирования:\n${escapeHtml(formatError)}</span>`;
-      terminalBody.scrollTop = terminalBody.scrollHeight;
-    } else if (formattedResult) {
-      const position = monacoEditor.getPosition();
-      const scrollTop = monacoEditor.getScrollTop();
-      monacoEditor.setValue(formattedResult);
-      if (position) monacoEditor.setPosition(position);
-      monacoEditor.setScrollTop(scrollTop);
-    }
-  } catch (err) {
-    console.error("Format error:", err);
-  } finally {
-    if (formatCodeBtn) {
-      formatCodeBtn.innerHTML = origBtnText;
-      formatCodeBtn.disabled = false;
-    }
-  }
 }
 
 // Vertical Resizer for Output Terminal
@@ -1291,284 +909,6 @@ function initTerminalResizer() {
   }, { passive: true });
 
   document.addEventListener("touchend", onDragEnd);
-}
-
-// Step-by-Step Python Visualizer & Debugger
-async function runStepByStepDebug() {
-  if (!monacoEditor) return;
-  const code = monacoEditor.getValue().trim();
-  if (!code) return;
-
-  if (!pyodideInstance) {
-    await initPyodide();
-    if (!pyodideInstance) {
-      alert("Pyodide еще загружается, подождите секунду.");
-      return;
-    }
-  }
-
-  stepDebugBtn.disabled = true;
-  stepDebugBtn.innerHTML = "<span>⏳</span> Анализ...";
-
-  try {
-    pyodideInstance.globals.set("__debug_code__", code);
-
-    const traceScript = `
-import sys
-import io
-import json
-import types
-import builtins
-import ast
-import js
-
-async def __trace_exec__(code_str, max_steps=500):
-    steps = []
-    stdout_buf = io.StringIO()
-    old_stdout = sys.stdout
-    sys.stdout = stdout_buf
-
-    def safe_repr(val):
-        try:
-            r = repr(val)
-            if len(r) > 100:
-                r = r[:97] + "..."
-            return r
-        except:
-            return "<non-repr>"
-
-    def capture_vars(frame_dict):
-        res = {}
-        for k, v in frame_dict.items():
-            if k.startswith("__") and k.endswith("__"):
-                continue
-            if isinstance(v, (types.ModuleType, types.FunctionType, types.BuiltinFunctionType)):
-                continue
-            t_name = type(v).__name__
-            val_str = safe_repr(v)
-            val_category = "other"
-            if isinstance(v, (int, float)):
-                val_category = "number"
-            elif isinstance(v, str):
-                val_category = "string"
-            elif isinstance(v, bool):
-                val_category = "bool"
-
-            res[k] = {
-                "type": t_name,
-                "value": val_str,
-                "category": val_category
-            }
-        return res
-
-    def tracer(frame, event, arg):
-        if len(steps) >= max_steps:
-            return None
-        if frame.f_code.co_filename != "main.py":
-            return tracer
-
-        step_data = {
-            "line": frame.f_lineno,
-            "event": event,
-            "func": frame.f_code.co_name,
-            "locals": capture_vars(frame.f_locals),
-            "globals": capture_vars(frame.f_globals),
-            "stdout": stdout_buf.getvalue(),
-            "exception": None,
-            "return_value": None
-        }
-
-        if event == "exception" and arg:
-            exc_type, exc_val, _ = arg
-            step_data["exception"] = f"{exc_type.__name__}: {exc_val}"
-        elif event == "return":
-            step_data["return_value"] = safe_repr(arg)
-
-        steps.append(step_data)
-        return tracer
-
-    # Asynchronously collect inputs interactively from user
-    input_values_queue = []
-    try:
-        parsed_tree = ast.parse(code_str, "main.py")
-        for node in ast.walk(parsed_tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "input":
-                prompt_arg = ""
-                if node.args and isinstance(node.args[0], ast.Constant):
-                    prompt_arg = str(node.args[0].value)
-                val = await js.showCustomInputModal(prompt_arg)
-                if val is None:
-                    raise EOFError("Ввод отменен пользователем")
-                input_values_queue.append((prompt_arg, str(val)))
-    except EOFError:
-        sys.stdout = old_stdout
-        return json.dumps([])
-    except Exception:
-        pass
-
-    input_iter = iter(input_values_queue)
-
-    def interactive_trace_input(prompt=""):
-        prompt_str = str(prompt) if prompt is not None else ""
-        if prompt_str:
-            stdout_buf.write(prompt_str)
-        try:
-            p_arg, user_val = next(input_iter)
-            stdout_buf.write(user_val + "\\n")
-            return user_val
-        except StopIteration:
-            stdout_buf.write("\\n")
-            return ""
-
-    old_input = getattr(builtins, "input", None)
-    builtins.input = interactive_trace_input
-
-    try:
-        compiled = compile(code_str, "main.py", "exec")
-        sys.settrace(tracer)
-        exec_globals = {"__name__": "__main__", "input": interactive_trace_input}
-        exec(compiled, exec_globals)
-    except Exception as e:
-        steps.append({
-            "line": getattr(e, "lineno", (steps[-1]["line"] if steps else 1)),
-            "event": "exception",
-            "func": "<module>",
-            "locals": {},
-            "globals": {},
-            "stdout": stdout_buf.getvalue(),
-            "exception": f"{type(e).__name__}: {e}",
-            "return_value": None
-        })
-    finally:
-        sys.settrace(None)
-        if old_input is not None:
-            builtins.input = old_input
-        sys.stdout = old_stdout
-
-    return json.dumps(steps)
-
-__debug_steps_json__ = await __trace_exec__(__debug_code__)
-`;
-
-    await pyodideInstance.runPythonAsync(traceScript);
-    const stepsJson = pyodideInstance.globals.get("__debug_steps_json__");
-    debugSteps = JSON.parse(stepsJson);
-
-    if (!debugSteps || debugSteps.length === 0) {
-      return;
-    }
-
-    // Activate Debug UI
-    isDebugActive = true;
-    terminalBody.style.display = "none";
-    debugViewBody.style.display = "flex";
-    debugControls.style.display = "flex";
-    terminalTitleText.textContent = "ДЕБАГГЕР (ПОШАГОВОЕ ВЫПОЛНЕНИЕ)";
-    clearTermBtn.style.display = "none";
-
-    goToDebugStep(0);
-  } catch (err) {
-    console.error("Debug trace error:", err);
-    alert(`Ошибка запуска дебаггера: ${err.message || err}`);
-  } finally {
-    stepDebugBtn.disabled = false;
-    stepDebugBtn.innerHTML = "<span>🪲</span> Отладка";
-  }
-}
-
-function goToDebugStep(index) {
-  if (!debugSteps || debugSteps.length === 0) return;
-  currentDebugIndex = Math.max(0, Math.min(index, debugSteps.length - 1));
-
-  const step = debugSteps[currentDebugIndex];
-  const total = debugSteps.length;
-
-  // Update navigation buttons
-  debugStepInfo.textContent = `Шаг ${currentDebugIndex + 1} из ${total}`;
-  debugFirstBtn.disabled = currentDebugIndex === 0;
-  debugPrevBtn.disabled = currentDebugIndex === 0;
-  debugNextBtn.disabled = currentDebugIndex === total - 1;
-  debugLastBtn.disabled = currentDebugIndex === total - 1;
-
-  // Highlight active line in Monaco Editor
-  if (monacoEditor) {
-    debugDecorations = monacoEditor.deltaDecorations(debugDecorations, [
-      {
-        range: new monaco.Range(step.line, 1, step.line, 1),
-        options: {
-          isWholeLine: true,
-          className: "monaco-debug-active-line",
-          glyphMarginClassName: "monaco-debug-active-glyph"
-        }
-      }
-    ]);
-    monacoEditor.revealLineInCenter(step.line);
-  }
-
-  // Update Event Banner
-  if (step.exception) {
-    debugEventIcon.textContent = "❌";
-    debugEventText.innerHTML = `<span style="color: #f87171;">Ошибка на строке ${step.line}: ${escapeHtml(step.exception)}</span>`;
-  } else if (step.event === "call") {
-    debugEventIcon.textContent = "📞";
-    debugEventText.textContent = `Вызов функции ${step.func}() (строка ${step.line})`;
-  } else if (step.event === "return") {
-    debugEventIcon.textContent = "↩️";
-    debugEventText.textContent = `Возврат из функции ${step.func} -> ${step.return_value} (строка ${step.line})`;
-  } else {
-    debugEventIcon.textContent = "📍";
-    debugEventText.textContent = `Строка ${step.line} (${step.func === "<module>" ? "Основной код" : "Функция " + step.func})`;
-  }
-
-  // Update Scope and Variables
-  const isFunctionScope = step.func && step.func !== "<module>";
-  debugScopeBadge.textContent = isFunctionScope ? `Функция: ${step.func}()` : "Глобальная область";
-
-  const varsToShow = isFunctionScope && Object.keys(step.locals).length > 0 ? step.locals : step.globals;
-  renderDebugVariables(varsToShow);
-
-  // Update stdout output
-  debugOutputText.textContent = step.stdout || "(Вывода пока нет)";
-}
-
-function renderDebugVariables(varsObj) {
-  debugVarsContainer.innerHTML = "";
-  const keys = Object.keys(varsObj || {});
-
-  if (keys.length === 0) {
-    debugVarsContainer.innerHTML = `<div class="empty-vars-hint">На этом шаге пользовательских переменных нет</div>`;
-    return;
-  }
-
-  keys.forEach((key) => {
-    const item = varsObj[key];
-    const card = document.createElement("div");
-    card.className = "var-card";
-    card.innerHTML = `
-      <div class="var-left">
-        <span class="var-name">${escapeHtml(key)}</span>
-        <span class="var-type">: ${escapeHtml(item.type)}</span>
-      </div>
-      <div class="var-val ${escapeHtml(item.category)}">${escapeHtml(item.value)}</div>
-    `;
-    debugVarsContainer.appendChild(card);
-  });
-}
-
-function exitDebugMode() {
-  isDebugActive = false;
-  debugSteps = [];
-  currentDebugIndex = 0;
-
-  if (monacoEditor && debugDecorations.length) {
-    debugDecorations = monacoEditor.deltaDecorations(debugDecorations, []);
-  }
-
-  debugViewBody.style.display = "none";
-  debugControls.style.display = "none";
-  terminalBody.style.display = "block";
-  terminalTitleText.textContent = "ТЕРМИНАЛ ВЫВОДА (STDOUT / STDERR)";
-  clearTermBtn.style.display = "inline-block";
 }
 
 function escapeHtml(str) {
@@ -1987,12 +1327,12 @@ render_fractal()`
     code: `import sys, math
 
 logo = [
-  "   ____         _   _                   ",
-  "  |  _ \\ _   _ | |_| |__   ___  _ __    ",
-  "  | |_) | | | || __| '_ \\ / _ \\| '_ \\   ",
-  "  |  __/| |_| || |_| | | | (_) | | | |  ",
-  "  |_|    \\__, | \\__|_| |_|\\___/|_| |_|  ",
-  "         |___/                          "
+  r"   ____         _   _                   ",
+  r"  |  _ \\ _   _ | |_| |__   ___  _ __    ",
+  r"  | |_) | | | || __| '_ \\ / _ \\| '_ \\   ",
+  r"  |  __/| |_| || |_| | | | (_) | | | |  ",
+  r"  |_|    \\__, | \\__|_| |_|\\___/|_| |_|  ",
+  r"         |___/                          "
 ]
 
 for row in logo:
@@ -2104,34 +1444,21 @@ function initHeroSandbox() {
     terminalOutput.textContent = "Выполнение скрипта в песочнице...";
 
     try {
-      if (!pyodideInstance) {
-        await initPyodide();
+      const res = await executePythonCode(preset.code);
+      const elapsed = Math.round(parseFloat(res.duration) || 0);
+
+      if (res.success) {
+        terminalOutput.textContent = res.output || "[Скрипт выполнен без вывода]";
+        execTimeBadge.textContent = `⚡ ${elapsed} мс`;
+      } else {
+        let errText = "";
+        if (res.output && res.output.trim()) {
+          errText += `Вывод:\n${res.output}\n\n`;
+        }
+        errText += `Ошибка выполнения:\n${res.error}`;
+        terminalOutput.textContent = errText;
+        execTimeBadge.textContent = "ошибка";
       }
-
-      if (!pyodideInstance) {
-        terminalOutput.textContent = "Ошибка: Интерактивная среда Python недоступна.";
-        return;
-      }
-
-      const startTime = performance.now();
-      const runWrapper = `
-import sys
-from io import StringIO
-__hero_stdout__ = StringIO()
-__old_stdout__ = sys.stdout
-sys.stdout = __hero_stdout__
-try:
-${preset.code.split("\n").map(l => "    " + l).join("\n")}
-finally:
-    sys.stdout = __old_stdout__
-__hero_result__ = __hero_stdout__.getvalue()
-`;
-      await pyodideInstance.runPythonAsync(runWrapper);
-      const result = pyodideInstance.globals.get("__hero_result__");
-      const elapsed = Math.round(performance.now() - startTime);
-
-      terminalOutput.textContent = result || "[Скрипт выполнен без вывода]";
-      execTimeBadge.textContent = `⚡ ${elapsed} мс`;
     } catch (err) {
       console.error("Hero Run Error:", err);
       terminalOutput.textContent = `Ошибка выполнения:\n${err.message || err}`;
@@ -2141,15 +1468,6 @@ __hero_result__ = __hero_stdout__.getvalue()
       runBtn.innerHTML = "<span>▶</span> Запустить";
     }
   });
-
-  if (openFullIdeBtn) {
-    openFullIdeBtn.addEventListener("click", () => {
-      const preset = HERO_PRESETS[currentHeroPresetKey];
-      if (!preset) return;
-      openTopicWorkspace(TOPICS[0].id);
-      loadCodeIntoIde(preset.code);
-    });
-  }
 }
 
 // ===================================================

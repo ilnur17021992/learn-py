@@ -11,6 +11,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
 
+  <!-- Design System & UI Kit Modules -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/buttons.css">
+  <link rel="stylesheet" href="styles/toasts.css">
+
   <!-- IDE CSS Modules -->
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="styles/sidebar.css">
@@ -99,16 +105,14 @@
         <span>Отладка</span>
       </button>
 
-      <div class="nav-divider"></div>
-
-      <button id="stopProjectBtn" class="top-nav-btn btn-stop" disabled title="Остановить выполнение">
+      <button id="stopProjectBtn" class="top-nav-btn btn-stop" style="display: none;" title="Остановить выполнение">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
           <rect x="2.5" y="2.5" width="11" height="11" rx="2"/>
         </svg>
         <span>Стоп</span>
       </button>
 
-      <button id="runProjectBtn" class="top-nav-btn btn-run" title="Запустить /main.py (Ctrl+Enter / F5)">
+      <button id="runProjectBtn" class="top-nav-btn btn-run" title="Запустить /main.py (Ctrl+Enter)">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
           <path d="M4 2.5a.5.5 0 0 1 .77-.42l8.5 5.5a.5.5 0 0 1 0 .84l-8.5 5.5A.5.5 0 0 1 4 13.5v-11z"/>
         </svg>
@@ -120,10 +124,26 @@
   <!-- Main IDE Workspace -->
   <div class="ide-workspace">
 
+    <!-- Left Side Activity Strip (Terminal header & PyCharm style) -->
+    <aside class="ide-side-strip" id="ideSideStrip">
+      <div class="side-strip-top">
+        <button id="stripToggleExplorerBtn" class="side-strip-btn active" title="Проводник файлов (Ctrl+B)">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.293a1.5 1.5 0 0 1 1.06.44L8.293 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
     <!-- Left Sidebar (Explorer & File Tree) -->
     <aside class="ide-sidebar" id="ideSidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">ПРОВОДНИК</span>
+        <button id="collapseSidebarBtn" class="sidebar-collapse-btn" title="Свернуть проводник (Ctrl+B)">
+          <svg class="sidebar-header-arrow" viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Project Section Header with File/Folder Creation Icons -->
@@ -166,6 +186,12 @@
       <section class="ide-editor-section">
         <!-- Tabs Header Bar -->
         <div class="editor-tabs-bar" id="editorTabsBar">
+          <button id="expandSidebarBtn" class="editor-expand-sidebar-btn" style="display: none;" title="Показать проводник (Ctrl+B)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+              <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 0v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z"/>
+            </svg>
+            <span>Проводник</span>
+          </button>
           <!-- Rendered dynamically by tabManager.js -->
         </div>
 
@@ -175,33 +201,18 @@
         </div>
       </section>
 
-      <!-- Resizer: Editor to Terminal -->
-      <div class="pane-resizer resizer-vertical" id="terminalResizer"></div>
-
-      <!-- Bottom Terminal Section -->
+      <!-- Bottom Terminal Section with Full-Width Resizer Header -->
       <section class="ide-terminal-section" id="ideTerminalSection">
-        <div class="terminal-header">
-          <div class="terminal-tabs">
+        <div class="terminal-header" id="terminalHeader">
+          <div class="terminal-title-container">
+            <span class="terminal-drag-handle" title="Потяните для изменения высоты">⠿</span>
             <span class="term-tab active">
-              <span class="term-tab-icon" id="termTabIcon">🖥️</span> <span id="termTabTitle">Терминал (Python 3.12)</span>
+              <span class="term-tab-icon" id="termTabIcon">🖥️</span>
+              <span id="termTabTitle">Терминал</span>
             </span>
           </div>
 
           <div class="terminal-actions">
-            <!-- Step Debugger Controls in Header -->
-            <div id="ideDebugControls" class="debug-controls-header" style="display: none;">
-              <button id="debugFirstBtn" class="debug-nav-btn" title="В начало (Home)">⏮</button>
-              <button id="debugPrevBtn" class="debug-nav-btn" title="Шаг назад (← / Shift+F10)">◀ Назад</button>
-              <span id="debugStepInfo" class="debug-step-badge">Шаг 1 из 1</span>
-              <button id="debugNextBtn" class="debug-nav-btn primary" title="Шаг вперёд (→ / F10)">Вперёд ▶</button>
-              <button id="debugLastBtn" class="debug-nav-btn" title="В конец (End)">⏭</button>
-              <button id="debugExitBtn" class="debug-nav-btn exit" title="Выйти из режима отладки (Esc)">⏹ Завершить</button>
-            </div>
-
-            <span id="workerStatusBadge" class="worker-status-badge status-idle">
-              <span class="status-dot"></span>
-              <span id="workerStatusLabel">Готов к запуску</span>
-            </span>
             <button id="clearTerminalBtn" class="term-action-btn" title="Очистить вывод">
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
@@ -219,10 +230,20 @@
 
         <!-- Step-by-Step Visualizer View (Exact Lesson Reference) -->
         <div id="debugViewBody" class="debug-view-body" style="display: none;">
-          <!-- Top Step Status Banner -->
+          <!-- Top Step Status Banner with Controls -->
           <div id="debugEventBanner" class="debug-event-banner">
-            <span id="debugEventIcon">📍</span>
-            <span id="debugEventText">Выполнение строки 1</span>
+            <div class="debug-event-info">
+              <span id="debugEventIcon">📍</span>
+              <span id="debugEventText">Выполнение строки 1</span>
+            </div>
+            <div id="ideDebugControls" class="debug-controls-header debug-banner-controls">
+              <button id="debugFirstBtn" class="debug-nav-btn" title="В начало (Home)">⏮</button>
+              <button id="debugPrevBtn" class="debug-nav-btn" title="Шаг назад (← / Shift+F10)">◀ Назад</button>
+              <span id="debugStepInfo" class="debug-step-badge">Шаг 1 из 1</span>
+              <button id="debugNextBtn" class="debug-nav-btn primary" title="Шаг вперёд (→ / F10)">Вперёд ▶</button>
+              <button id="debugLastBtn" class="debug-nav-btn" title="В конец (End)">⏭</button>
+              <button id="debugExitBtn" class="debug-nav-btn exit" title="Выйти из режима отладки (Esc)">⏹ Завершить</button>
+            </div>
           </div>
 
           <div class="debug-panels-grid">

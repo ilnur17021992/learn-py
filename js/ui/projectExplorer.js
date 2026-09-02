@@ -1,6 +1,7 @@
 // js/ui/projectExplorer.js - File & Folder Explorer tree with nesting and in-app styled dialogs
 import { state } from '../state.js';
 import { getFileIcon } from './icons.js';
+import { showConfirmModal, showAlertModal, showPromptModal } from '../utils/modalDialog.js';
 
 export class ProjectExplorer {
   constructor(containerEl) {
@@ -32,11 +33,49 @@ export class ProjectExplorer {
       newFolderBtn.addEventListener('click', () => this.showNewFolderDialog());
     }
 
+    this.setupProjectSectionToggle();
     this.setupRootDropZone();
 
     if (state.currentProject) {
       this.render();
     }
+  }
+
+  setupProjectSectionToggle() {
+    const sectionHeader = document.querySelector('.sidebar-section-header');
+    const toggleTarget = document.querySelector('.section-header-left');
+    const STORAGE_KEY_SECTION_COLLAPSED = 'learn_py_ide_project_section_collapsed';
+
+    if (!sectionHeader || !toggleTarget) return;
+
+    const setSectionCollapsed = (collapsed) => {
+      if (collapsed) {
+        sectionHeader.classList.add('collapsed');
+        if (this.containerEl) this.containerEl.classList.add('collapsed');
+        try {
+          localStorage.setItem(STORAGE_KEY_SECTION_COLLAPSED, 'true');
+        } catch (e) {}
+      } else {
+        sectionHeader.classList.remove('collapsed');
+        if (this.containerEl) this.containerEl.classList.remove('collapsed');
+        try {
+          localStorage.setItem(STORAGE_KEY_SECTION_COLLAPSED, 'false');
+        } catch (e) {}
+      }
+    };
+
+    // Restore saved collapsed state
+    try {
+      if (localStorage.getItem(STORAGE_KEY_SECTION_COLLAPSED) === 'true') {
+        setSectionCollapsed(true);
+      }
+    } catch (e) {}
+
+    toggleTarget.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCollapsed = sectionHeader.classList.contains('collapsed');
+      setSectionCollapsed(!isCollapsed);
+    });
   }
 
   setupRootDropZone() {
@@ -298,24 +337,42 @@ export class ProjectExplorer {
       </div>
       <div class="tree-item-actions">
         <button class="tree-action-btn add-file-inside-btn" title="Создать файл в папке">
-          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
             <path d="M9 1H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6l-5-5zm4 12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h4v4h4v7z"/>
             <path d="M8 8a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V12.5a.5.5 0 0 1-1 0V11H6a.5.5 0 0 1 0-1h1.5V8.5A.5.5 0 0 1 8 8z"/>
           </svg>
         </button>
         <button class="tree-action-btn add-folder-inside-btn" title="Создать подпапку">
-          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
             <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.293a1.5 1.5 0 0 1 1.06.44L8.293 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
             <path d="M7.5 7.5a.5.5 0 0 1 .5.5v1.5H9.5a.5.5 0 0 1 0 1H8V12a.5.5 0 0 1-1 0v-1.5H5.5a.5.5 0 0 1 0-1H7V8a.5.5 0 0 1 .5-.5z"/>
           </svg>
         </button>
-        <button class="tree-action-btn rename-btn" title="Переименовать папку">✏️</button>
-        <button class="tree-action-btn delete-file-btn" title="Удалить папку">❌</button>
+        <button class="tree-action-btn rename-btn" title="Переименовать папку">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <path d="M12.146.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-4 1a.5.5 0 0 1-.65-.65l1-4a.5.5 0 0 1 .11-.168l9.5-9.5zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.806 3.224 3.224-.806a.5.5 0 0 1 .123-.057l-2.484-2.484a.5.5 0 0 1-.057.123z"/>
+          </svg>
+        </button>
+        <button class="tree-action-btn delete-file-btn" title="Удалить папку">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+          </svg>
+        </button>
       </div>
     `;
 
     // Drag events for folder
     folderEl.addEventListener('dragstart', (e) => {
+      if (document.body.classList.contains('resizing-active')) {
+        e.preventDefault();
+        return;
+      }
+      const rect = folderEl.getBoundingClientRect();
+      if (e.clientX > rect.right - 14) {
+        e.preventDefault();
+        return;
+      }
       e.stopPropagation();
       folderEl.classList.add('dragging');
       e.dataTransfer.setData('application/json', JSON.stringify({
@@ -438,13 +495,31 @@ export class ProjectExplorer {
         <span class="tree-label">${this.escapeHtml(fileNode.name)}</span>
       </div>
       <div class="tree-item-actions">
-        <button class="tree-action-btn rename-btn" title="Переименовать">✏️</button>
-        <button class="tree-action-btn delete-file-btn" title="Удалить файл">✕</button>
+        <button class="tree-action-btn rename-btn" title="Переименовать">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <path d="M12.146.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-4 1a.5.5 0 0 1-.65-.65l1-4a.5.5 0 0 1 .11-.168l9.5-9.5zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.806 3.224 3.224-.806a.5.5 0 0 1 .123-.057l-2.484-2.484a.5.5 0 0 1-.057.123z"/>
+          </svg>
+        </button>
+        <button class="tree-action-btn delete-file-btn" title="Удалить файл">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+          </svg>
+        </button>
       </div>
     `;
 
     // Drag events for file
     itemEl.addEventListener('dragstart', (e) => {
+      if (document.body.classList.contains('resizing-active')) {
+        e.preventDefault();
+        return;
+      }
+      const rect = itemEl.getBoundingClientRect();
+      if (e.clientX > rect.right - 14) {
+        e.preventDefault();
+        return;
+      }
       e.stopPropagation();
       itemEl.classList.add('dragging');
       e.dataTransfer.setData('application/json', JSON.stringify({
@@ -651,168 +726,15 @@ export class ProjectExplorer {
   }
 
   showAlertDialog(title, message, icon = '⚠️') {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay active';
-
-      overlay.innerHTML = `
-        <div class="ide-dialog-card">
-          <div class="ide-dialog-header">
-            <h4 class="ide-dialog-title">
-              <span>${icon}</span>
-              <span>${title}</span>
-            </h4>
-            <button class="modal-close-btn close-dialog-btn" title="Закрыть (Esc)">✕</button>
-          </div>
-          <div class="ide-dialog-body">
-            <div class="ide-dialog-message">${message}</div>
-            <div class="ide-dialog-actions">
-              <button type="button" class="dialog-btn dialog-btn-primary alert-ok-btn">Понятно</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(overlay);
-
-      const okBtn = overlay.querySelector('.alert-ok-btn');
-      const closeBtn = overlay.querySelector('.close-dialog-btn');
-
-      const cleanup = () => {
-        document.removeEventListener('keydown', onKeyDown);
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.remove(), 200);
-        resolve();
-      };
-
-      const onKeyDown = (e) => {
-        if (e.key === 'Escape' || e.key === 'Enter') cleanup();
-      };
-      document.addEventListener('keydown', onKeyDown);
-
-      okBtn.addEventListener('click', cleanup);
-      closeBtn.addEventListener('click', cleanup);
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) cleanup();
-      });
-
-      setTimeout(() => okBtn.focus(), 50);
-    });
+    return showAlertModal({ title, message, icon });
   }
 
   showInputDialog({ title, icon, message, placeholder, defaultValue, submitText }) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay active';
-
-      overlay.innerHTML = `
-        <div class="ide-dialog-card">
-          <div class="ide-dialog-header">
-            <h4 class="ide-dialog-title">
-              <span>${icon || '📄'}</span>
-              <span>${title}</span>
-            </h4>
-            <button class="modal-close-btn close-dialog-btn" title="Закрыть (Esc)">✕</button>
-          </div>
-          <form class="ide-dialog-form">
-            <div class="ide-dialog-body">
-              <div class="ide-dialog-message">${message}</div>
-              <input type="text" class="ide-dialog-input" placeholder="${placeholder || ''}" value="${defaultValue || ''}" autofocus required>
-              <div class="ide-dialog-actions">
-                <button type="button" class="dialog-btn dialog-btn-cancel">Отмена</button>
-                <button type="submit" class="dialog-btn dialog-btn-primary">${submitText || 'Подтвердить'}</button>
-              </div>
-            </div>
-          </form>
-        </div>
-      `;
-
-      document.body.appendChild(overlay);
-
-      const input = overlay.querySelector('.ide-dialog-input');
-      const form = overlay.querySelector('.ide-dialog-form');
-      const closeBtn = overlay.querySelector('.close-dialog-btn');
-      const cancelBtn = overlay.querySelector('.dialog-btn-cancel');
-
-      const cleanup = (val) => {
-        document.removeEventListener('keydown', onKeyDown);
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.remove(), 200);
-        resolve(val);
-      };
-
-      const onKeyDown = (e) => {
-        if (e.key === 'Escape') cleanup(null);
-      };
-      document.addEventListener('keydown', onKeyDown);
-
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        cleanup(input.value.trim());
-      });
-
-      closeBtn.addEventListener('click', () => cleanup(null));
-      cancelBtn.addEventListener('click', () => cleanup(null));
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) cleanup(null);
-      });
-
-      setTimeout(() => {
-        input.focus();
-        input.select();
-      }, 50);
-    });
+    return showPromptModal({ title, icon, message, placeholder, defaultValue, submitText });
   }
 
   showConfirmDialog(title, message) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay active';
-
-      overlay.innerHTML = `
-        <div class="ide-dialog-card">
-          <div class="ide-dialog-header">
-            <h4 class="ide-dialog-title">
-              <span>⚠️</span>
-              <span>${title}</span>
-            </h4>
-            <button class="modal-close-btn close-dialog-btn" title="Закрыть (Esc)">✕</button>
-          </div>
-          <div class="ide-dialog-body">
-            <div class="ide-dialog-message">${message}</div>
-            <div class="ide-dialog-actions">
-              <button type="button" class="dialog-btn dialog-btn-cancel">Отмена</button>
-              <button type="button" class="dialog-btn dialog-btn-danger confirm-btn">Удалить</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(overlay);
-
-      const closeBtn = overlay.querySelector('.close-dialog-btn');
-      const cancelBtn = overlay.querySelector('.dialog-btn-cancel');
-      const confirmBtn = overlay.querySelector('.confirm-btn');
-
-      const cleanup = (confirmed) => {
-        document.removeEventListener('keydown', onKeyDown);
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.remove(), 200);
-        resolve(confirmed);
-      };
-
-      const onKeyDown = (e) => {
-        if (e.key === 'Escape') cleanup(false);
-      };
-      document.addEventListener('keydown', onKeyDown);
-
-      closeBtn.addEventListener('click', () => cleanup(false));
-      cancelBtn.addEventListener('click', () => cleanup(false));
-      confirmBtn.addEventListener('click', () => cleanup(true));
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) cleanup(false);
-      });
-    });
+    return showConfirmModal({ title, message, isDanger: true });
   }
 
   getFileIcon(fileName) {

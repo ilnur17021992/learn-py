@@ -380,15 +380,48 @@
   border-color: #374b63;
 }
 
+.ide-dialog-input {
+  width: 100%;
+  background: #080d15;
+  border: 1px solid var(--border-light, #2d3f59);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.ide-dialog-input::placeholder {
+  color: #64748b;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.ide-dialog-input:focus {
+  border-color: var(--primary, #ff6b00);
+  box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.2);
+  background: #0b131f;
+}
+
+.dialog-btn-primary,
 .dialog-btn-submit {
   background: var(--primary, #ff6b00);
   color: #000000;
-  border: none;
+  border: 1px solid var(--primary, #ff6b00);
   font-weight: 800;
 }
 
+.dialog-btn-primary:hover,
 .dialog-btn-submit:hover {
   background: var(--primary-hover, #ff8533);
+  border-color: var(--primary-hover, #ff8533);
+}
+
+.dialog-btn-primary:active,
+.dialog-btn-submit:active {
+  transform: scale(0.98);
 }
 
 .dialog-btn-danger {
@@ -396,6 +429,21 @@
   color: #ffffff;
   border: none;
   font-weight: 700;
+}
+
+.dialog-btn:focus-visible,
+.project-item-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dialog-btn:active,
+.project-item-btn:active {
+  transform: scale(0.97);
+}
+
+.dialog-btn-danger:hover {
+  background: #b91c1c;
 }
 
 /* ===================================================

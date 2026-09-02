@@ -1,6 +1,7 @@
 // js/utils/zipExporter.js - Export and Import projects via JSZip
 import { state } from '../state.js';
 import { db } from '../db.js';
+import { toast } from '../ui/components/toast.js';
 
 export const zipExporter = {
   async exportCurrentProject() {
@@ -26,8 +27,9 @@ export const zipExporter = {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.success('Проект успешно экспортирован в ZIP');
     } catch (err) {
-      alert('Ошибка при экспорте архива: ' + err.message);
+      toast.error('Ошибка при экспорте архива: ' + err.message);
     }
   },
 
@@ -41,6 +43,7 @@ export const zipExporter = {
         const newProj = await db.createProject(projectName, {
           '/main.py': text
         });
+        toast.success('Файл успешно импортирован');
         window.location.href = `ide.html?project=${encodeURIComponent(newProj.id)}`;
       } else if (file.name.endsWith('.zip')) {
         const { default: JSZip } = await import('https://esm.sh/jszip@3.10.1');
@@ -63,12 +66,13 @@ export const zipExporter = {
 
         const projectName = file.name.replace(/\.zip$/, '');
         const newProj = await db.createProject(projectName, files);
+        toast.success('Проект успешно импортирован');
         window.location.href = `ide.html?project=${encodeURIComponent(newProj.id)}`;
       } else {
-        alert('Поддерживаются только .zip архивы и .py файлы');
+        toast.warning('Поддерживаются только .zip архивы и .py файлы');
       }
     } catch (err) {
-      alert('Ошибка при импорте: ' + err.message);
+      toast.error('Ошибка при импорте: ' + err.message);
     }
   }
 };

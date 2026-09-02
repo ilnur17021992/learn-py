@@ -133,28 +133,28 @@ export class EditorManager {
             });
           }
 
-          // Define GitHub Dark Theme
+          // Define Unified Python Lab Dark Theme
           monaco.editor.defineTheme('github-dark-custom', {
             base: 'vs-dark',
             inherit: true,
             rules: [
-              { token: 'comment', foreground: '8b949e', fontStyle: 'italic' },
+              { token: 'comment', foreground: '64748b', fontStyle: 'italic' },
               { token: 'keyword', foreground: 'ff7b72', fontStyle: 'bold' },
-              { token: 'string', foreground: 'a5d6ff' },
-              { token: 'number', foreground: '79c0ff' },
-              { token: 'type', foreground: 'ffa657' },
+              { token: 'string', foreground: '38bdf8' },
+              { token: 'number', foreground: 'fb923c' },
+              { token: 'type', foreground: 'fbbf24' },
               { token: 'function', foreground: 'd2a8ff' }
             ],
             colors: {
-              'editor.background': '#0d1117',
-              'editor.foreground': '#e6edf3',
-              'editorLineNumber.foreground': '#6e7681',
-              'editorLineNumber.activeForeground': '#f0f6fc',
-              'editor.selectionBackground': '#58a6ff33',
-              'editor.inactiveSelectionBackground': '#58a6ff1a',
-              'editorCursor.foreground': '#58a6ff',
-              'editorGutter.background': '#0d1117',
-              'editor.lineHighlightBackground': '#161b2255'
+              'editor.background': '#0c121c',
+              'editor.foreground': '#f1f5f9',
+              'editorLineNumber.foreground': '#2d3f59',
+              'editorLineNumber.activeForeground': '#ff6b00',
+              'editor.selectionBackground': '#ff6b0033',
+              'editor.inactiveSelectionBackground': '#ff6b001a',
+              'editorCursor.foreground': '#ff6b00',
+              'editorGutter.background': '#0c121c',
+              'editor.lineHighlightBackground': '#151f3044'
             }
           });
 

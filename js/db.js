@@ -96,8 +96,8 @@ export const db = {
     });
   },
 
-  async createProject(name = 'Новый проект', initialFiles = null) {
-    const id = generateId();
+  async createProject(name = 'Новый проект', initialFiles = null, customId = null) {
+    const id = customId || generateId();
     const now = Date.now();
     const project = {
       id,
@@ -111,6 +111,19 @@ export const db = {
       }
     };
     await this.saveProject(project);
+    return project;
+  },
+
+  async getOrCreateTopicProject(topicId, topicName, initialCode = null) {
+    if (!topicId) throw new Error('topicId is required');
+    const id = `topic_${topicId}`;
+    let project = await this.getProject(id);
+    if (!project) {
+      const files = {
+        '/main.py': (typeof initialCode === 'string' && initialCode.trim()) ? initialCode : DEFAULT_MAIN_PY
+      };
+      project = await this.createProject(topicName || `Урок: ${topicId}`, files, id);
+    }
     return project;
   }
 };

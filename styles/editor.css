@@ -5,15 +5,15 @@
   flex-direction: column;
   height: calc(100% - var(--terminal-height));
   min-height: 120px;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-editor, #0c121c);
   overflow: hidden;
   position: relative;
 }
 
 /* Tabs Header Bar */
 .editor-tabs-bar {
-  height: 35px;
-  background-color: var(--bg-secondary);
+  height: 36px;
+  background-color: #080d15;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -30,8 +30,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
-  background-color: var(--bg-secondary);
+  padding: 0 14px;
+  background-color: #080d15;
   color: var(--text-muted);
   font-size: 12.5px;
   cursor: pointer;
@@ -39,7 +39,7 @@
   border-top: 2px solid transparent;
   user-select: none;
   white-space: nowrap;
-  transition: all 0.1s ease;
+  transition: all 0.12s ease;
   position: relative;
 }
 
@@ -55,18 +55,18 @@
 }
 
 .editor-tab.drag-over-left {
-  box-shadow: inset 3px 0 0 0 var(--accent-color, #38bdf8);
+  box-shadow: inset 3px 0 0 0 var(--primary, #ff6b00);
 }
 
 .editor-tab.drag-over-right {
-  box-shadow: inset -3px 0 0 0 var(--accent-color, #38bdf8);
+  box-shadow: inset -3px 0 0 0 var(--primary, #ff6b00);
 }
 
 .editor-tab.active {
-  background-color: var(--bg-primary);
-  color: var(--text-bright);
-  border-top-color: var(--accent-color);
-  font-weight: 500;
+  background-color: var(--bg-editor, #0c121c);
+  color: #ffffff;
+  border-top-color: var(--primary, #ff6b00);
+  font-weight: 600;
 }
 
 .tab-icon {
@@ -105,18 +105,18 @@
 }
 
 .tab-close-btn:hover {
-  background: rgba(240, 246, 252, 0.15);
-  color: var(--text-bright);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 /* Editor Container */
 .editor-container {
   flex: 1;
   width: 100%;
-  height: calc(100% - 35px);
+  height: calc(100% - 36px);
   position: relative;
   overflow: hidden;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-editor, #0c121c);
 }
 
 .cm-root {
@@ -127,8 +127,8 @@
 .ide-code-textarea {
   width: 100%;
   height: 100%;
-  background-color: #0d1117;
-  color: #e6edf3;
+  background-color: #0c121c;
+  color: #f1f5f9;
   font-family: var(--font-mono);
   font-size: 13.5px;
   line-height: 1.6;
@@ -143,7 +143,7 @@
 }
 
 .ide-code-textarea::selection {
-  background-color: rgba(56, 139, 253, 0.35);
+  background-color: rgba(255, 107, 0, 0.25);
 }
 
 /* Monaco Overflow Widgets & Tooltips on top of all layers */
@@ -156,15 +156,20 @@
 }
 
 .monaco-hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6) !important;
 }
 
 /* Monaco Debug Step Highlight (Lessons Reference) */
 .monaco-debug-active-line {
-  background-color: rgba(31, 111, 235, 0.35) !important;
-  border-left: 3px solid #58a6ff !important;
+  background-color: rgba(37, 99, 235, 0.28) !important;
+  border-left: 3px solid #38bdf8 !important;
 }
 
 .monaco-debug-active-glyph {
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2358a6ff'%3E%3Cpath d='M4 2.5a.5.5 0 0 1 .77-.42l8.5 5.5a.5.5 0 0 1 0 .84l-8.5 5.5A.5.5 0 0 1 4 13.5v-11z'/%3E%3C/svg%3E") center center no-repeat !important;
+  background: #38bdf8 !important;
+  width: 8px !important;
+  height: 8px !important;
+  margin-left: 5px;
+  margin-top: 5px;
+  border-radius: 50%;
 }

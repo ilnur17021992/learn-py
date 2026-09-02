@@ -1,15 +1,9 @@
 
-
-
-
-
-
 https://www.programiz.com/python-programming/online-compiler/
 
 
 ПОПРАВИТЬ
-Автозавершение кода в IDE
-В консоли неправильный вывод 
+
 
 
 

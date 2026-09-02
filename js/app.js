@@ -1,4 +1,4 @@
-// js/app.js - Main IDE Application Entry Point
+// js/app.js - Modular Python Web IDE Application
 import { db } from './db.js';
 import { state } from './state.js';
 import { EditorManager } from './editor.js';
@@ -10,19 +10,33 @@ import { WorkerBridge } from './worker/workerBridge.js';
 import { zipExporter } from './utils/zipExporter.js';
 import { projectModal } from './projectModal.js';
 
-class PythonWebIDEApp {
-  constructor() {
+export class PythonWebIDEApp {
+  constructor(options = {}) {
+    this.options = Object.assign({
+      mode: 'standalone', // 'standalone' | 'embedded'
+      collapseSidebarOnInit: false,
+      projectId: null,
+    }, options);
+
     this.editor = null;
     this.tabManager = null;
     this.projectExplorer = null;
     this.terminal = null;
     this.workerBridge = null;
+    this.toggleSidebar = null;
+    this.setSidebarCollapsed = null;
+    this.isInitialized = false;
   }
 
   async init() {
-    // 1. Get project ID from URL query string
-    const urlParams = new URLSearchParams(window.location.search);
-    let projectId = urlParams.get('project');
+    if (this.isInitialized) return;
+
+    // 1. Get project ID from options or URL query string
+    let projectId = this.options.projectId;
+    if (!projectId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      projectId = urlParams.get('project');
+    }
 
     if (!projectId) {
       // Look up existing projects or create a default starter project
@@ -33,10 +47,11 @@ class PythonWebIDEApp {
         const starter = await db.createProject('Первый проект');
         projectId = starter.id;
       }
-      // Update URL without reload
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('project', projectId);
-      window.history.replaceState({}, '', newUrl);
+      if (this.options.mode === 'standalone') {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('project', projectId);
+        window.history.replaceState({}, '', newUrl);
+      }
     }
 
     try {
@@ -44,8 +59,12 @@ class PythonWebIDEApp {
     } catch (err) {
       console.warn('Project not found, creating new one:', err);
       const newProj = await db.createProject('Мой проект');
-      window.location.href = `ide.html?project=${encodeURIComponent(newProj.id)}`;
-      return;
+      if (this.options.mode === 'standalone') {
+        window.location.href = `ide.html?project=${encodeURIComponent(newProj.id)}`;
+        return;
+      } else {
+        await state.loadProject(newProj.id);
+      }
     }
 
     // 2. Initialize UI Components
@@ -76,10 +95,14 @@ class PythonWebIDEApp {
     // 4. Update Header UI
     this.updateHeaderProjectInfo();
 
+    // 5. Initial sidebar collapsed state for embedded/lesson mode
+    if (this.options.collapseSidebarOnInit && typeof this.setSidebarCollapsed === 'function') {
+      this.setSidebarCollapsed(true);
+    }
+
     // Welcome message in terminal
-    this.terminal.appendSystem(`[Python Web IDE v1.0] Инициализировано.\n`);
-    this.terminal.appendSystem(`Активный проект: ${state.currentProject.name}\n`);
-    this.terminal.appendSystem(`Нажмите «Запустить» (Ctrl+Enter / F5) для выполнения /main.py\n\n`);
+    this.terminal.appendSystem(`Нажмите «Запустить» (Ctrl+Enter) для выполнения /main.py\n\n`);
+    this.isInitialized = true;
   }
 
   updateHeaderProjectInfo() {
@@ -140,8 +163,11 @@ class PythonWebIDEApp {
     });
 
     this.workerBridge.addEventListener('finished', (e) => {
-      if (runBtn) runBtn.disabled = false;
-      if (stopBtn) stopBtn.disabled = true;
+      if (stopBtn) stopBtn.style.display = 'none';
+      if (runBtn) {
+        runBtn.style.display = 'inline-flex';
+        runBtn.disabled = false;
+      }
 
       if (e.detail.success) {
         this.terminal.appendLine('\n[Выполнение успешно завершено]\n', 'success');
@@ -278,6 +304,39 @@ class PythonWebIDEApp {
     }
   }
 
+  // Switch or open a topic-specific project
+  async openTopicProject(topicId, topicName, initialCode = null) {
+    if (!topicId) return;
+    await state.forceSave();
+    const project = await db.getOrCreateTopicProject(topicId, topicName, initialCode);
+    if (!state.currentProject || state.currentProject.id !== project.id) {
+      await state.loadProject(project.id);
+    }
+    this.updateHeaderProjectInfo();
+    return project;
+  }
+
+  // Public API to set code into the active or specified file
+  setCode(code, filename = '/main.py') {
+    if (!state.currentProject) return;
+
+    const normalizedPath = filename.startsWith('/') ? filename : `/${filename}`;
+    if (!state.currentProject.files[normalizedPath]) {
+      state.createFile(normalizedPath, code);
+    } else {
+      state.updateFileContent(normalizedPath, code);
+    }
+    state.openTab(normalizedPath);
+    if (this.editor) {
+      this.editor.setContent(code);
+    }
+  }
+
+  // Public API to run code
+  async runCurrentCode() {
+    await this.runProject();
+  }
+
   async runProject() {
     const runBtn = document.getElementById('runProjectBtn');
     const stopBtn = document.getElementById('stopProjectBtn');
@@ -285,13 +344,17 @@ class PythonWebIDEApp {
     // Force save all files before execution
     await state.forceSave();
 
-    if (runBtn) runBtn.disabled = true;
-    if (stopBtn) stopBtn.disabled = false;
+    if (runBtn) runBtn.style.display = 'none';
+    if (stopBtn) {
+      stopBtn.style.display = 'inline-flex';
+      stopBtn.disabled = false;
+    }
 
     this.terminal.clear();
-    this.terminal.appendSystem(`[Запуск /main.py...]\n\n`);
+    const activeFile = state.activeFile || '/main.py';
+    this.terminal.appendSystem(`[Запуск ${activeFile}...]\n\n`);
 
-    this.workerBridge.run(state.currentProject.files, '/main.py');
+    this.workerBridge.run(state.currentProject.files, activeFile);
   }
 
   async formatActiveCode() {
@@ -394,7 +457,7 @@ class PythonWebIDEApp {
       if (debugControls) debugControls.style.display = 'none';
       if (workerStatusBadge) workerStatusBadge.style.display = 'flex';
       if (clearTerminalBtn) clearTerminalBtn.style.display = 'flex';
-      if (termTabTitle) termTabTitle.textContent = 'Терминал (Python 3.12)';
+      if (termTabTitle) termTabTitle.textContent = 'Терминал';
       if (termTabIcon) termTabIcon.textContent = '🖥️';
       this.terminal.clear();
       this.terminal.appendSystem('[Отладка завершена]\n');
@@ -417,24 +480,42 @@ class PythonWebIDEApp {
       if (debugNextBtn) debugNextBtn.disabled = currentIdx === totalSteps - 1;
       if (debugLastBtn) debugLastBtn.disabled = currentIdx === totalSteps - 1;
 
-      // Update Event Banner
+      // Update Event Banner and Scope Badge
       if (debugEventText) {
         debugEventText.textContent = `Строка ${step.line || 1} (${step.func === '<module>' ? 'Основной код' : `Функция ${step.func}`})`;
       }
 
-      // Render Variables Inspector
+      const debugScopeBadge = document.getElementById('debugScopeBadge');
+      const isInsideFunc = step.func && step.func !== '<module>';
+      if (debugScopeBadge) {
+        if (isInsideFunc) {
+          debugScopeBadge.textContent = `Локальная область (${step.func})`;
+          debugScopeBadge.className = 'debug-scope-badge local-scope';
+        } else {
+          debugScopeBadge.textContent = 'Глобальная область';
+          debugScopeBadge.className = 'debug-scope-badge global-scope';
+        }
+      }
+
+      // Render Variables Inspector with Local vs Global separation
       if (debugVarsContainer) {
         debugVarsContainer.innerHTML = '';
-        const allVars = { ...(step.globals || {}), ...(step.locals || {}) };
-        const keys = Object.keys(allVars);
+        const globals = step.globals || {};
+        const locals = step.locals || {};
 
-        if (keys.length === 0) {
-          debugVarsContainer.innerHTML = '<div class="debug-empty-hint">(Переменные пока не созданы)</div>';
-        } else {
+        const renderVarList = (varsObj, title, isLocal) => {
+          const keys = Object.keys(varsObj);
+          if (keys.length === 0) return;
+
+          const groupHeader = document.createElement('div');
+          groupHeader.className = `debug-vars-group-header ${isLocal ? 'local' : 'global'}`;
+          groupHeader.textContent = title;
+          debugVarsContainer.appendChild(groupHeader);
+
           keys.forEach(varName => {
-            const varInfo = allVars[varName];
+            const varInfo = varsObj[varName];
             const row = document.createElement('div');
-            row.className = 'debug-var-row';
+            row.className = `debug-var-row ${isLocal ? 'local-var' : 'global-var'}`;
             row.innerHTML = `
               <div class="debug-var-name-type">
                 <span class="debug-var-name">${varName}</span>
@@ -444,6 +525,17 @@ class PythonWebIDEApp {
             `;
             debugVarsContainer.appendChild(row);
           });
+        };
+
+        if (isInsideFunc) {
+          renderVarList(locals, '🔷 Локальные переменные', true);
+          renderVarList(globals, '🌐 Глобальные переменные', false);
+        } else {
+          renderVarList(globals, '🌐 Глобальные переменные', false);
+        }
+
+        if (debugVarsContainer.children.length === 0) {
+          debugVarsContainer.innerHTML = '<div class="debug-empty-hint">(Переменные пока не созданы)</div>';
         }
       }
 
@@ -486,37 +578,154 @@ class PythonWebIDEApp {
 
   bindResizers() {
     const STORAGE_KEY_SIDEBAR_WIDTH = 'learn_py_ide_sidebar_width';
+    const STORAGE_KEY_SIDEBAR_COLLAPSED = 'learn_py_ide_sidebar_collapsed';
     const STORAGE_KEY_TERMINAL_HEIGHT = 'learn_py_ide_terminal_height';
 
-    // 1. Sidebar Resizer
+    // 1. Sidebar Resizer & Collapse/Expand Logic
     const sidebarResizer = document.getElementById('sidebarResizer');
     const sidebar = document.getElementById('ideSidebar');
+    const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
+    const stripToggleExplorerBtn = document.getElementById('stripToggleExplorerBtn');
+    const expandSidebarBtn = document.getElementById('expandSidebarBtn');
+    const toggleSidebarNavBtn = document.getElementById('toggleSidebarNavBtn');
 
     if (sidebarResizer && sidebar) {
+      let lastExpandedWidth = 240;
+
       // Restore saved sidebar width
       try {
         const savedWidth = localStorage.getItem(STORAGE_KEY_SIDEBAR_WIDTH);
         if (savedWidth) {
           const widthVal = Math.max(160, Math.min(parseFloat(savedWidth), window.innerWidth * 0.6));
           sidebar.style.width = `${widthVal}px`;
+          lastExpandedWidth = widthVal;
         }
       } catch (e) {
         console.error('Error loading saved sidebar width:', e);
       }
 
+      const setSidebarCollapsed = (collapsed) => {
+        if (collapsed) {
+          const curWidth = sidebar.getBoundingClientRect().width;
+          if (curWidth > 80) {
+            lastExpandedWidth = curWidth;
+          }
+          sidebar.classList.add('collapsed');
+          sidebarResizer.classList.add('collapsed');
+          if (stripToggleExplorerBtn) {
+            stripToggleExplorerBtn.classList.remove('active');
+            stripToggleExplorerBtn.setAttribute('title', 'Открыть проводник (Ctrl+B)');
+          }
+          if (expandSidebarBtn) expandSidebarBtn.style.display = 'none';
+          if (toggleSidebarNavBtn) {
+            toggleSidebarNavBtn.classList.remove('active');
+            toggleSidebarNavBtn.setAttribute('title', 'Показать проводник (Ctrl+B)');
+          }
+          if (this.options.mode === 'standalone') {
+            try {
+              localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, 'true');
+            } catch (e) {}
+          }
+        } else {
+          sidebar.classList.remove('collapsed');
+          sidebarResizer.classList.remove('collapsed');
+          const targetWidth = Math.max(160, Math.min(lastExpandedWidth || 240, window.innerWidth * 0.6));
+          sidebar.style.width = `${targetWidth}px`;
+          if (stripToggleExplorerBtn) {
+            stripToggleExplorerBtn.classList.add('active');
+            stripToggleExplorerBtn.setAttribute('title', 'Скрыть проводник (Ctrl+B)');
+          }
+          if (expandSidebarBtn) expandSidebarBtn.style.display = 'none';
+          if (toggleSidebarNavBtn) {
+            toggleSidebarNavBtn.classList.add('active');
+            toggleSidebarNavBtn.setAttribute('title', 'Скрыть проводник (Ctrl+B)');
+          }
+          if (this.options.mode === 'standalone') {
+            try {
+              localStorage.setItem(STORAGE_KEY_SIDEBAR_COLLAPSED, 'false');
+              localStorage.setItem(STORAGE_KEY_SIDEBAR_WIDTH, String(targetWidth));
+            } catch (e) {}
+          }
+        }
+        if (this.editor && this.editor.editorInstance) {
+          this.editor.editorInstance.layout();
+        }
+      };
+
+      const toggleSidebar = () => {
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        setSidebarCollapsed(!isCollapsed);
+      };
+
+      this.toggleSidebar = toggleSidebar;
+      this.setSidebarCollapsed = setSidebarCollapsed;
+
+      // Restore collapsed state (in standalone mode or respect default)
+      if (this.options.mode === 'standalone') {
+        try {
+          const savedCollapsed = localStorage.getItem(STORAGE_KEY_SIDEBAR_COLLAPSED);
+          if (savedCollapsed === 'true') {
+            setSidebarCollapsed(true);
+          } else {
+            if (stripToggleExplorerBtn) stripToggleExplorerBtn.classList.add('active');
+            if (toggleSidebarNavBtn) toggleSidebarNavBtn.classList.add('active');
+          }
+        } catch (e) {}
+      } else if (this.options.collapseSidebarOnInit) {
+        setSidebarCollapsed(true);
+      }
+
+      if (collapseSidebarBtn) {
+        collapseSidebarBtn.addEventListener('click', () => setSidebarCollapsed(true));
+      }
+      if (stripToggleExplorerBtn) {
+        stripToggleExplorerBtn.addEventListener('click', () => toggleSidebar());
+      }
+      if (expandSidebarBtn) {
+        expandSidebarBtn.addEventListener('click', () => setSidebarCollapsed(false));
+      }
+      if (toggleSidebarNavBtn) {
+        toggleSidebarNavBtn.addEventListener('click', () => toggleSidebar());
+      }
+      sidebarResizer.addEventListener('dblclick', () => toggleSidebar());
+
       let isResizingX = false;
+      let startX = 0;
+      let startWidth = 240;
 
       sidebarResizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         isResizingX = true;
+        startX = e.clientX;
+        startWidth = sidebar.getBoundingClientRect().width;
         sidebarResizer.classList.add('resizing');
+        document.body.classList.add('resizing-active');
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
       });
 
       document.addEventListener('mousemove', (e) => {
         if (!isResizingX) return;
-        const newWidth = Math.max(160, Math.min(e.clientX, Math.min(600, window.innerWidth * 0.6)));
-        sidebar.style.width = `${newWidth}px`;
+        const deltaX = e.clientX - startX;
+        const ideContainer = sidebar.closest('.ide-workspace') || document.body;
+        const maxAllowed = Math.min(600, ideContainer.clientWidth * 0.6);
+        const newWidth = startWidth + deltaX;
+
+        if (newWidth < 75) {
+          // Snap collapse if dragged all the way to the left
+          setSidebarCollapsed(true);
+          isResizingX = false;
+          sidebarResizer.classList.remove('resizing');
+          document.body.classList.remove('resizing-active');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          return;
+        }
+
+        const clampedWidth = Math.max(160, Math.min(newWidth, maxAllowed));
+        sidebar.style.width = `${clampedWidth}px`;
+        lastExpandedWidth = clampedWidth;
         if (this.editor && this.editor.editorInstance) {
           this.editor.editorInstance.layout();
         }
@@ -526,6 +735,7 @@ class PythonWebIDEApp {
         if (isResizingX) {
           isResizingX = false;
           sidebarResizer.classList.remove('resizing');
+          document.body.classList.remove('resizing-active');
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
           try {
@@ -538,61 +748,153 @@ class PythonWebIDEApp {
       });
     }
 
-    // 2. Terminal Resizer
-    const terminalResizer = document.getElementById('terminalResizer');
+    // 2. Terminal Resizer (Full-Width Header Drag Handle & Click to Toggle)
+    const terminalHeader = document.getElementById('terminalHeader') || document.getElementById('terminalResizer');
     const terminalSection = document.getElementById('ideTerminalSection');
 
-    if (terminalResizer && terminalSection) {
+    if (terminalHeader && terminalSection) {
+      const DEFAULT_HEIGHT = 220;
+      const getCollapsedHeight = () => terminalHeader.offsetHeight || 34;
+      let lastExpandedHeight = DEFAULT_HEIGHT;
+
       // Restore saved terminal height
       try {
         const savedHeight = localStorage.getItem(STORAGE_KEY_TERMINAL_HEIGHT);
         if (savedHeight) {
-          const heightVal = Math.max(80, Math.min(parseFloat(savedHeight), window.innerHeight * 0.75));
-          terminalSection.style.height = `${heightVal}px`;
+          const heightVal = parseFloat(savedHeight);
+          const collapsedH = getCollapsedHeight();
+          if (heightVal > collapsedH + 15) {
+            const clampedH = Math.min(heightVal, window.innerHeight * 0.75);
+            terminalSection.style.height = `${clampedH}px`;
+            lastExpandedHeight = clampedH;
+            terminalSection.classList.remove('collapsed');
+          } else {
+            terminalSection.classList.add('collapsed');
+            terminalSection.style.height = '';
+          }
         }
       } catch (e) {
         console.error('Error loading saved terminal height:', e);
       }
 
       let isResizingY = false;
+      let startY = 0;
+      let startHeight = 0;
+      let didDrag = false;
 
-      terminalResizer.addEventListener('mousedown', () => {
+      const onDragStart = (clientY) => {
         isResizingY = true;
-        terminalResizer.classList.add('resizing');
+        didDrag = false;
+        startY = clientY;
+        startHeight = terminalSection.getBoundingClientRect().height;
+        terminalSection.classList.add('resizing');
         document.body.style.cursor = 'row-resize';
         document.body.style.userSelect = 'none';
-      });
+      };
 
-      document.addEventListener('mousemove', (e) => {
+      const onDragMove = (clientY) => {
         if (!isResizingY) return;
-        const newHeight = Math.max(80, Math.min(window.innerHeight - e.clientY, window.innerHeight * 0.75));
-        terminalSection.style.height = `${newHeight}px`;
+        const deltaY = startY - clientY;
+        if (Math.abs(deltaY) > 3) {
+          didDrag = true;
+        }
+
+        const collapsedH = getCollapsedHeight();
+        const maxHeight = Math.max(collapsedH, window.innerHeight * 0.85);
+        let newHeight = startHeight + deltaY;
+
+        if (newHeight < collapsedH + 20) {
+          terminalSection.classList.add('collapsed');
+          terminalSection.style.height = '';
+        } else {
+          newHeight = Math.min(newHeight, maxHeight);
+          lastExpandedHeight = newHeight;
+          terminalSection.classList.remove('collapsed');
+          terminalSection.style.height = `${newHeight}px`;
+        }
+
         if (this.editor && this.editor.editorInstance) {
           this.editor.editorInstance.layout();
         }
-      });
+      };
 
-      document.addEventListener('mouseup', () => {
-        if (isResizingY) {
-          isResizingY = false;
-          terminalResizer.classList.remove('resizing');
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-          try {
-            localStorage.setItem(STORAGE_KEY_TERMINAL_HEIGHT, String(terminalSection.getBoundingClientRect().height));
-          } catch (e) {}
-          if (this.editor && this.editor.editorInstance) {
-            this.editor.editorInstance.layout();
+      const onDragEnd = () => {
+        if (!isResizingY) return;
+        const wasDragging = didDrag;
+        isResizingY = false;
+        terminalSection.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+
+        const collapsedH = getCollapsedHeight();
+
+        if (!wasDragging) {
+          // Toggle collapsed / expanded state on click
+          const isCollapsed = terminalSection.classList.contains('collapsed') ||
+            terminalSection.getBoundingClientRect().height <= collapsedH + 5;
+          if (isCollapsed) {
+            const targetHeight = Math.max(140, lastExpandedHeight || DEFAULT_HEIGHT);
+            terminalSection.classList.remove('collapsed');
+            terminalSection.style.height = `${targetHeight}px`;
+            try {
+              localStorage.setItem(STORAGE_KEY_TERMINAL_HEIGHT, String(targetHeight));
+            } catch (err) {}
+          } else {
+            lastExpandedHeight = terminalSection.getBoundingClientRect().height;
+            terminalSection.classList.add('collapsed');
+            terminalSection.style.height = '';
+            try {
+              localStorage.setItem(STORAGE_KEY_TERMINAL_HEIGHT, String(collapsedH));
+            } catch (err) {}
+          }
+        } else {
+          const isCollapsed = terminalSection.classList.contains('collapsed');
+          if (isCollapsed) {
+            terminalSection.style.height = '';
+            try {
+              localStorage.setItem(STORAGE_KEY_TERMINAL_HEIGHT, String(collapsedH));
+            } catch (e) {}
+          } else {
+            const currentHeight = terminalSection.getBoundingClientRect().height;
+            try {
+              localStorage.setItem(STORAGE_KEY_TERMINAL_HEIGHT, String(currentHeight));
+            } catch (e) {}
           }
         }
+
+        if (this.editor && this.editor.editorInstance) {
+          this.editor.editorInstance.layout();
+        }
+      };
+
+      terminalHeader.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a')) return;
+        onDragStart(e.clientY);
+        e.preventDefault();
       });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isResizingY) {
+          onDragMove(e.clientY);
+        }
+      });
+
+      document.addEventListener('mouseup', onDragEnd);
     }
   }
 
   bindHotkeys() {
     document.addEventListener('keydown', (e) => {
-      // Run: Ctrl+Enter or F5
-      if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F5') {
+      // Toggle Sidebar: Ctrl+B / Cmd+B
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        if (typeof this.toggleSidebar === 'function') {
+          this.toggleSidebar();
+        }
+      }
+
+      // Run: Ctrl+Enter
+      if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         this.runProject();
       }
@@ -614,8 +916,10 @@ class PythonWebIDEApp {
   }
 }
 
-// Bootstrap IDE
-const ideApp = new PythonWebIDEApp();
-document.addEventListener('DOMContentLoaded', () => {
-  ideApp.init();
-});
+// Auto-initialize if running directly on ide.html
+if (window.location.pathname.endsWith('ide.html') || window.location.pathname.endsWith('ide')) {
+  const ideApp = new PythonWebIDEApp({ mode: 'standalone' });
+  document.addEventListener('DOMContentLoaded', () => {
+    ideApp.init();
+  });
+}

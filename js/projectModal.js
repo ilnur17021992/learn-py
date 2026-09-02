@@ -1,5 +1,6 @@
 // js/projectModal.js - Modal window for Project Management (ES Module)
 import { db } from './db.js';
+import { showConfirmModal, showAlertModal } from './utils/modalDialog.js';
 
 class ProjectModalManager {
   constructor() {
@@ -95,7 +96,11 @@ class ProjectModalManager {
           const newProject = await db.createProject(name);
           this.openProject(newProject.id);
         } catch (err) {
-          alert('Ошибка при создании проекта: ' + err.message);
+          showAlertModal({
+            title: 'Ошибка',
+            message: 'Ошибка при создании проекта: ' + err.message,
+            type: 'error'
+          });
         }
       });
     }
@@ -202,7 +207,15 @@ class ProjectModalManager {
 
         itemEl.querySelector('.delete-btn').addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm(`Удалить проект "${project.name}"?`)) {
+          const confirmed = await showConfirmModal({
+            title: 'Удаление проекта',
+            message: `Удалить проект "${project.name}"? Это действие нельзя отменить.`,
+            icon: '🗑️',
+            confirmText: 'Удалить',
+            cancelText: 'Отмена',
+            isDanger: true
+          });
+          if (confirmed) {
             await db.deleteProject(project.id);
             await this.renderProjectsList();
           }

@@ -20,11 +20,18 @@
   <meta name="twitter:title" content="Python Интерактивный учебник & Песочница">
   <meta name="twitter:description" content="Интерактивный справочник, уроки и онлайн-песочница Python прямо в браузере.">
 
-  <!-- Monaco Editor Loader -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+  <!-- Design Tokens & Unified UI Kit -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/buttons.css">
+  <link rel="stylesheet" href="styles/toasts.css">
 
   <!-- Prism.js CSS Theme (Left Snippets Syntax Highlighting) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/sidebar.css">
+  <link rel="stylesheet" href="styles/editor.css">
+  <link rel="stylesheet" href="styles/terminal.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="styles/modal.css">
 
@@ -222,91 +229,188 @@
       </div>
     </section>
 
-    <!-- Column 3: Full-featured CodeMirror IDE & Terminal -->
+    <!-- Column 3: Full-featured IDE Workspace -->
     <section class="workspace-ide-pane">
-      <div class="ide-header">
-        <div class="ide-tab">
-          <svg viewBox="0 -0.5 256 256" width="14" height="14" version="1.1" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid" style="vertical-align: -2px; display: inline-block;"><defs><linearGradient id="pyLessonTabB" x1="12.959%" y1="12.039%" x2="79.639%" y2="78.201%"><stop stop-color="#387EB8" offset="0%"/><stop stop-color="#366994" offset="100%"/></linearGradient><linearGradient id="pyLessonTabY" x1="19.128%" y1="20.579%" x2="90.742%" y2="88.429%"><stop stop-color="#FFE052" offset="0%"/><stop stop-color="#FFC331" offset="100%"/></linearGradient></defs><g><path d="M126.915866,0.0722755491 C62.0835831,0.0722801733 66.1321288,28.1874648 66.1321288,28.1874648 L66.2044043,57.3145115 L128.072276,57.3145115 L128.072276,66.0598532 L41.6307171,66.0598532 C41.6307171,66.0598532 0.144551098,61.3549438 0.144551098,126.771315 C0.144546474,192.187673 36.3546019,189.867871 36.3546019,189.867871 L57.9649915,189.867871 L57.9649915,159.51214 C57.9649915,159.51214 56.8001363,123.302089 93.5968379,123.302089 L154.95878,123.302089 C154.95878,123.302089 189.434218,123.859386 189.434218,89.9830604 L189.434218,33.9695088 C189.434218,33.9695041 194.668541,0.0722755491 126.915866,0.0722755491 L126.915866,0.0722755491 L126.915866,0.0722755491 Z M92.8018069,19.6589497 C98.9572068,19.6589452 103.932242,24.6339846 103.932242,30.7893845 C103.932246,36.9447844 98.9572068,41.9198193 92.8018069,41.9198193 C86.646407,41.9198239 81.6713721,36.9447844 81.6713721,30.7893845 C81.6713674,24.6339846 86.646407,19.6589497 92.8018069,19.6589497 L92.8018069,19.6589497 L92.8018069,19.6589497 Z" fill="url(#pyLessonTabB)"/><path d="M128.757101,254.126271 C193.589403,254.126271 189.540839,226.011081 189.540839,226.011081 L189.468564,196.884035 L127.600692,196.884035 L127.600692,188.138693 L214.042251,188.138693 C214.042251,188.138693 255.528417,192.843589 255.528417,127.427208 C255.52844,62.0108566 219.318366,64.3306589 219.318366,64.3306589 L197.707976,64.3306589 L197.707976,94.6863832 C197.707976,94.6863832 198.87285,130.896434 162.07613,130.896434 L100.714182,130.896434 C100.714182,130.896434 66.238745,130.339138 66.238745,164.215486 L66.238745,220.229038 C66.238745,220.229038 61.0044225,254.126271 128.757101,254.126271 L128.757101,254.126271 L128.757101,254.126271 Z M162.87116,234.539597 C156.715759,234.539597 151.740726,229.564564 151.740726,223.409162 C151.740726,217.253759 156.715759,212.278727 162.87116,212.278727 C169.026563,212.278727 174.001595,217.253759 174.001595,223.409162 C174.001618,229.564564 169.026563,234.539597 162.87116,234.539597 L162.87116,234.539597 L162.87116,234.539597 Z" fill="url(#pyLessonTabY)"/></g></svg> main.py
-        </div>
-        <div class="ide-actions">
-          <div id="ideSaveIndicator" class="ide-save-indicator" title="Код сохраняется в браузере автоматически">
-            <span>💾</span> <span>Сохранено</span>
+      <!-- IDE Header Bar -->
+      <div class="ide-navbar embedded-ide-navbar">
+        <div class="nav-brand-section">
+          <div class="project-title-box">
+            <span id="headerProjectName" class="project-name-display" contenteditable="true" spellcheck="false" title="Нажмите, чтобы переименовать проект">Учебный проект</span>
           </div>
-          <button id="formatCodeBtn" class="ide-format-btn" title="Форматировать код по стандарту PEP 8">
-            <span>🪄</span> Формат
+          <div class="nav-divider"></div>
+          <button id="exportZipBtn" class="top-nav-btn btn-action" title="Скачать проект (.zip)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+            </svg>
+            <span>Экспорт</span>
           </button>
-          <button id="stepDebugBtn" class="ide-step-btn" disabled title="Пошаговая визуализация выполнения">
-            <span>🪲</span> Отладка
+
+          <label class="top-nav-btn btn-action import-zip-label" title="Импортировать .zip или .py">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+            </svg>
+            <span>Импорт</span>
+            <input type="file" id="importFileInput" accept=".zip,.py" style="display: none;">
+          </label>
+        </div>
+
+        <div class="nav-actions-section">
+          <span id="saveStatusIndicator" class="save-status-badge" title="Статус сохранения">Сохранено</span>
+          <button id="formatProjectBtn" class="top-nav-btn btn-action" title="Форматировать код (autopep8 / Shift+Alt+F)">
+            <span>🪄</span>
+            <span>Формат</span>
           </button>
-          <button id="resetCodeBtn" class="ide-reset-btn" title="Вернуть исходный пример">
-            <span>🔄</span> Сбросить
+          <button id="stepProjectBtn" class="top-nav-btn btn-action" title="Пошаговая отладка и визуализация выполнения (F10)">
+            <span>🪲</span>
+            <span>Отладка</span>
           </button>
-          <button id="runIdeBtn" class="ide-run-btn" disabled>
-            <span>▶</span> Запустить
+          <button id="stopProjectBtn" class="top-nav-btn btn-stop" style="display: none;" title="Остановить выполнение">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+              <rect x="2.5" y="2.5" width="11" height="11" rx="2"/>
+            </svg>
+            <span>Стоп</span>
+          </button>
+          <button id="runProjectBtn" class="top-nav-btn btn-run" title="Запустить /main.py (Ctrl+Enter)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+              <path d="M4 2.5a.5.5 0 0 1 .77-.42l8.5 5.5a.5.5 0 0 1 0 .84l-8.5 5.5A.5.5 0 0 1 4 13.5v-11z"/>
+            </svg>
+            <span>Запустить</span>
           </button>
         </div>
       </div>
 
-      <!-- Monaco Editor Mount Area -->
-      <div class="ide-editor-container" id="ideEditorContainer">
-        <div id="monacoEditorContainer" style="width: 100%; height: 100%;"></div>
-      </div>
+      <!-- Main IDE Workspace Area -->
+      <div class="ide-workspace embedded-ide-workspace">
+        <!-- Left Side Activity Strip -->
+        <aside class="ide-side-strip" id="ideSideStrip">
+          <div class="side-strip-top">
+            <button id="stripToggleExplorerBtn" class="side-strip-btn" title="Проводник файлов (Ctrl+B)">
+              <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+                <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.293a1.5 1.5 0 0 1 1.06.44L8.293 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+              </svg>
+            </button>
+          </div>
+        </aside>
 
-      <!-- Terminal / Debugger Output Pane -->
-      <div class="ide-terminal-pane" id="ideTerminalPane">
-        <div class="terminal-top" id="terminalResizer" title="Потяните вверх или вниз для изменения размера">
-          <div class="terminal-title-container">
-            <span class="terminal-drag-handle">⠿</span>
-            <span id="terminalTitleText">ТЕРМИНАЛ ВЫВОДА (STDOUT / STDERR)</span>
+        <!-- Left Sidebar (Explorer & File Tree) -->
+        <aside class="ide-sidebar collapsed" id="ideSidebar">
+          <div class="sidebar-header">
+            <span class="sidebar-title">ПРОВОДНИК</span>
+            <button id="collapseSidebarBtn" class="sidebar-collapse-btn" title="Свернуть проводник (Ctrl+B)">
+              <svg class="sidebar-header-arrow" viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+              </svg>
+            </button>
           </div>
 
-          <!-- Step-by-Step Debugger Controls (Visible in Debug Mode) -->
-          <div id="debugControls" class="debug-controls" style="display: none;">
-            <button id="debugFirstBtn" class="debug-nav-btn" title="В начало (Home)">⏮</button>
-            <button id="debugPrevBtn" class="debug-nav-btn" title="Шаг назад (←)">◀ Назад</button>
-            <span id="debugStepInfo" class="debug-step-badge">Шаг 1 из 1</span>
-            <button id="debugNextBtn" class="debug-nav-btn primary" title="Шаг вперёд (→ / F10)">Вперёд ▶</button>
-            <button id="debugLastBtn" class="debug-nav-btn" title="В конец (End)">⏭</button>
-            <button id="debugExitBtn" class="debug-nav-btn exit" title="Выйти из режима отладки (Esc)">⏹ Завершить</button>
+          <div class="sidebar-section-header">
+            <div class="section-header-left">
+              <svg class="section-arrow" viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+              </svg>
+              <span class="section-title-text">ПРОЕКТ</span>
+            </div>
+            <div class="section-actions">
+              <button id="newFileBtn" class="section-tool-btn" title="Создать файл">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                  <path d="M9 1H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6l-5-5zm4 12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h4v4h4v7z"/>
+                  <path d="M8 8a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V12.5a.5.5 0 0 1-1 0V11H6a.5.5 0 0 1 0-1h1.5V8.5A.5.5 0 0 1 8 8z"/>
+                </svg>
+              </button>
+              <button id="newFolderBtn" class="section-tool-btn" title="Создать папку">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                  <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.293a1.5 1.5 0 0 1 1.06.44L8.293 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+                  <path d="M7.5 7.5a.5.5 0 0 1 .5.5v1.5H9.5a.5.5 0 0 1 0 1H8V12a.5.5 0 0 1-1 0v-1.5H5.5a.5.5 0 0 1 0-1H7V8a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <button id="clearTermBtn" class="nav-btn" style="padding: 2px 8px; font-size: 11px;">Очистить</button>
-        </div>
+          <div id="fileExplorerContainer" class="file-explorer-tree"></div>
+        </aside>
 
-        <!-- Mode 1: Standard Terminal Output -->
-        <div id="terminalBody" class="terminal-body empty">
-          Нажмите «Запустить (Ctrl+Enter)» или выберите пример слева для выполнения кода.
-        </div>
+        <div class="pane-resizer resizer-horizontal collapsed" id="sidebarResizer"></div>
 
-        <!-- Mode 2: Step-by-Step Visualizer View -->
-        <div id="debugViewBody" class="debug-view-body" style="display: none;">
-          <!-- Top Step Status Banner -->
-          <div id="debugEventBanner" class="debug-event-banner">
-            <span id="debugEventIcon">📍</span>
-            <span id="debugEventText">Выполнение строки 1</span>
-          </div>
+        <main class="ide-main-area">
+          <section class="ide-editor-section">
+            <div class="editor-tabs-bar" id="editorTabsBar">
+              <button id="expandSidebarBtn" class="editor-expand-sidebar-btn" style="display: none;" title="Показать проводник (Ctrl+B)">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+                  <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 0v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z"/>
+                </svg>
+                <span>Проводник</span>
+              </button>
+            </div>
 
-          <div class="debug-panels-grid">
-            <!-- Left Panel: Variables & Memory Inspector -->
-            <div class="debug-vars-panel">
-              <div class="debug-panel-title">
-                <span>📦 ПЕРЕМЕННЫЕ В ПАМЯТИ</span>
-                <span id="debugScopeBadge" class="debug-scope-badge">Глобальная область</span>
+            <div class="editor-container" id="editorContainer">
+              <div id="codeMirrorRoot" class="cm-root"></div>
+            </div>
+          </section>
+
+          <section class="ide-terminal-section" id="ideTerminalSection">
+            <div class="terminal-header" id="terminalHeader">
+              <div class="terminal-title-container">
+                <span class="terminal-drag-handle" title="Потяните для изменения высоты">⠿</span>
+                <span class="term-tab active">
+                  <span class="term-tab-icon" id="termTabIcon">🖥️</span>
+                  <span id="termTabTitle">Терминал</span>
+                </span>
               </div>
-              <div id="debugVarsContainer" class="debug-vars-container">
-                <!-- Injected dynamically -->
+
+              <div class="terminal-actions">
+                <button id="clearTerminalBtn" class="term-action-btn" title="Очистить вывод">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                  </svg>
+                  <span>Очистить</span>
+                </button>
               </div>
             </div>
 
-            <!-- Right Panel: Step Console Output -->
-            <div class="debug-output-panel">
-              <div class="debug-panel-title">
-                <span>🖥️ ВЫВОД В КОНСОЛЬ (К ЭТОМУ ШАГУ)</span>
-              </div>
-              <pre id="debugOutputText" class="debug-step-stdout"></pre>
+            <div id="terminalBody" class="terminal-body empty">
+              <pre id="terminalOutput" class="terminal-output-code"></pre>
             </div>
-          </div>
-        </div>
+
+            <!-- Step-by-Step Visualizer View (Exact Lesson Reference) -->
+            <div id="debugViewBody" class="debug-view-body" style="display: none;">
+              <!-- Top Step Status Banner with Controls -->
+              <div id="debugEventBanner" class="debug-event-banner">
+                <div class="debug-event-info">
+                  <span id="debugEventIcon">📍</span>
+                  <span id="debugEventText">Выполнение строки 1</span>
+                </div>
+                <div id="ideDebugControls" class="debug-controls-header debug-banner-controls">
+                  <button id="debugFirstBtn" class="debug-nav-btn" title="В начало (Home)">⏮</button>
+                  <button id="debugPrevBtn" class="debug-nav-btn" title="Шаг назад (← / Shift+F10)">◀ Назад</button>
+                  <span id="debugStepInfo" class="debug-step-badge">Шаг 1 из 1</span>
+                  <button id="debugNextBtn" class="debug-nav-btn primary" title="Шаг вперёд (→ / F10)">Вперёд ▶</button>
+                  <button id="debugLastBtn" class="debug-nav-btn" title="В конец (End)">⏭</button>
+                  <button id="debugExitBtn" class="debug-nav-btn exit" title="Выйти из режима отладки (Esc)">⏹ Завершить</button>
+                </div>
+              </div>
+
+              <div class="debug-panels-grid">
+                <div class="debug-vars-panel">
+                  <div class="debug-panel-title">
+                    <span>📦 ПЕРЕМЕННЫЕ В ПАМЯТИ</span>
+                    <span id="debugScopeBadge" class="debug-scope-badge global-scope">Глобальная область</span>
+                  </div>
+                  <div id="debugVarsContainer" class="debug-vars-container"></div>
+                </div>
+
+                <div class="debug-output-panel">
+                  <div class="debug-panel-title">
+                    <span>🖥️ ВЫВОД В КОНСОЛЬ (К ЭТОМУ ШАГУ)</span>
+                  </div>
+                  <pre id="debugOutputText" class="debug-step-stdout"></pre>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     </section>
 
@@ -429,7 +533,7 @@
 
   <!-- App Logic Scripts -->
   <script src="topics.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
   <script type="module" src="js/projectModal.js"></script>
 </body>
 </html>
