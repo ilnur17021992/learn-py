@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "description": "Ordered topic registry. All metadata (title, category, icon, summary, theory, examples) is parsed exclusively from content/topics/<id>.md",
+  "topics": [
+    "basics",
+    "types",
+    "operators",
+    "variables",
+    "strings",
+    "lists",
+    "tuples",
+    "sets",
+    "dicts",
+    "conditions",
+    "loops",
+    "functions",
+    "comprehensions",
+    "exceptions",
+    "files",
+    "modules",
+    "common_modules",
+    "datetime",
+    "regex",
+    "builtins",
+    "venv",
+    "testing",
+    "logging",
+    "common_exceptions",
+    "best_practices",
+    "common_mistakes",
+    "roadmap"
+  ]
+}

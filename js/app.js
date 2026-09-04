@@ -899,6 +899,12 @@ export class PythonWebIDEApp {
         this.runProject();
       }
 
+      // Step Debugger: F10
+      if (e.code === 'F10' || e.key === 'F10') {
+        e.preventDefault();
+        this.stepActiveCode();
+      }
+
       // Save: Ctrl+S
       if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();

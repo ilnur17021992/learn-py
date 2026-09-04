@@ -5,6 +5,7 @@ import { courseSdk } from "./js/core/courseSdk.js";
 import { toast } from "./js/ui/components/toast.js";
 
 const workerBridge = new WorkerBridge();
+let TOPICS = [];
 let currentTopic = null;
 let currentExampleCode = "";
 let embeddedIDE = null;
@@ -13,6 +14,13 @@ let embeddedIDE = null;
 const STORAGE_KEY_COMPLETED = "learn_py_completed_topics";
 const STORAGE_KEY_TOPIC_CODE_PREFIX = "learn_py_code_topic_";
 const STORAGE_KEY_LAST_TOPIC = "learn_py_last_topic";
+
+// Search Placeholders
+export const SEARCH_PLACEHOLDERS = {
+  CATALOG: "Поиск по темам, методам и коду...",
+  PALETTE: "Поиск по методам (.append, sort), функциям, коду...",
+  IDE: "Поиск по файлам, папкам и коду..."
+};
 
 // DOM Elements
 const catalogView = document.getElementById("catalogView");
@@ -200,7 +208,9 @@ function updateProgressUI() {
 }
 
 // Initialize on page load
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  TOPICS = await courseSdk.init();
+  window.TOPICS = TOPICS;
   renderCatalog();
   renderSidebar();
   initBackgroundCanvas();
@@ -705,6 +715,16 @@ function setupEventListeners() {
     searchInput.addEventListener("input", (e) => {
       renderCatalog(e.target.value);
     });
+
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        searchInput.value = "";
+        searchInput.placeholder = SEARCH_PLACEHOLDERS.CATALOG;
+        renderCatalog("");
+        searchInput.blur();
+      }
+    });
   }
 
   if (runIdeBtn) {
@@ -810,6 +830,13 @@ function setupEventListeners() {
       }
       if (workspaceView.classList.contains("active")) {
         showCatalogView();
+      }
+    }
+
+    if (e.code === "F10" || e.key === "F10") {
+      e.preventDefault();
+      if (embeddedIDE && typeof embeddedIDE.stepActiveCode === "function") {
+        embeddedIDE.stepActiveCode();
       }
     }
   });
@@ -1078,16 +1105,9 @@ function initSearchPalette() {
     });
   }
 
-  // Global hotkey: Ctrl+K or / (when not typing in an input/textarea/editor)
+  // Global hotkey: / (when not typing in an input/textarea/editor)
   document.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-      e.preventDefault();
-      if (searchPaletteModal.style.display === "flex") {
-        closeSearchPalette();
-      } else {
-        openSearchPalette();
-      }
-    } else if (e.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && !document.activeElement.closest(".monaco-editor")) {
+    if (e.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) && !document.activeElement.closest(".monaco-editor")) {
       e.preventDefault();
       openSearchPalette();
     }
@@ -1098,6 +1118,7 @@ function openSearchPalette() {
   if (!searchPaletteModal || !paletteSearchInput) return;
   searchPaletteModal.style.display = "flex";
   paletteSearchInput.value = "";
+  paletteSearchInput.placeholder = SEARCH_PLACEHOLDERS.PALETTE;
   performPaletteSearch("");
   setTimeout(() => paletteSearchInput.focus(), 50);
 }
@@ -1105,6 +1126,11 @@ function openSearchPalette() {
 function closeSearchPalette() {
   if (!searchPaletteModal) return;
   searchPaletteModal.style.display = "none";
+  if (paletteSearchInput) {
+    paletteSearchInput.value = "";
+    paletteSearchInput.placeholder = SEARCH_PLACEHOLDERS.PALETTE;
+    paletteSearchInput.blur();
+  }
   paletteResults = [];
   activePaletteIndex = 0;
 }

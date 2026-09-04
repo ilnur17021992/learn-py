@@ -1,6 +1,8 @@
 // js/ui/searchBar.js - Global Search across Folders, Files, and File Contents
 import { state } from '../state.js';
 
+export const DEFAULT_IDE_SEARCH_PLACEHOLDER = 'Поиск по файлам, папкам и коду...';
+
 export class SearchBar {
   constructor(options = {}) {
     this.containerEl = document.getElementById('navSearchContainer');
@@ -39,6 +41,7 @@ export class SearchBar {
     if (this.clearBtn) {
       this.clearBtn.addEventListener('click', () => {
         this.inputEl.value = '';
+        this.inputEl.placeholder = DEFAULT_IDE_SEARCH_PLACEHOLDER;
         this.clearBtn.style.display = 'none';
         this.hideDropdown();
         this.inputEl.focus();
@@ -65,7 +68,9 @@ export class SearchBar {
 
     // Global hotkey Ctrl+P / Cmd+P / Ctrl+Shift+F
     window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || (e.shiftKey && (e.key === 'f' || e.key === 'F')))) {
+      const isP = e.code === 'KeyP' || e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З';
+      const isF = e.code === 'KeyF' || e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А';
+      if ((e.ctrlKey || e.metaKey) && (isP || (e.shiftKey && isF))) {
         e.preventDefault();
         this.inputEl.focus();
         this.inputEl.select();
@@ -102,8 +107,14 @@ export class SearchBar {
   handleKeydown(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      this.inputEl.value = '';
+      this.inputEl.placeholder = DEFAULT_IDE_SEARCH_PLACEHOLDER;
+      this.inputEl.blur();
+      if (this.clearBtn) this.clearBtn.style.display = 'none';
       this.hideDropdown();
-      if (this.editor) this.editor.focus();
+      if (this.editor && typeof this.editor.focus === 'function') {
+        this.editor.focus();
+      }
       return;
     }
 

@@ -1,30 +1,124 @@
-// js/core/courseSdk.js - Modular Course SDK & Progress Manager
+// js/core/courseSdk.js - Modular Course SDK & CourseService (Markdown Content-as-Data)
+import { parseTopicMarkdown } from './markdownParser.js';
 
 const STORAGE_KEY_COMPLETED = "learn_py_completed_topics";
 const STORAGE_KEY_TOPIC_CODE_PREFIX = "learn_py_code_topic_";
 const STORAGE_KEY_LAST_TOPIC = "learn_py_last_topic";
 
+export class CourseService {
+  constructor(options = {}) {
+    this.manifestPath = options.manifestPath || 'content/manifest.json';
+    this.topicsDir = options.topicsDir || 'content/topics';
+    this.manifest = null;
+    this.topicCache = new Map();
+    this.loadPromise = null;
+  }
+
+  async getManifest() {
+    if (this.manifest) return this.manifest;
+    try {
+      const response = await fetch(this.manifestPath);
+      if (!response.ok) {
+        throw new Error(`Failed to load manifest: ${response.status} ${response.statusText}`);
+      }
+      this.manifest = await response.json();
+      return this.manifest;
+    } catch (err) {
+      console.error('CourseService.getManifest error:', err);
+      return { topics: [] };
+    }
+  }
+
+  async getTopic(id) {
+    if (this.topicCache.has(id)) {
+      return this.topicCache.get(id);
+    }
+
+    try {
+      const response = await fetch(`${this.topicsDir}/${id}.md`);
+      if (!response.ok) {
+        throw new Error(`Failed to load topic ${id}: ${response.status}`);
+      }
+      const markdownText = await response.text();
+      const topic = parseTopicMarkdown(markdownText);
+      this.topicCache.set(id, topic);
+      return topic;
+    } catch (err) {
+      console.error(`CourseService.getTopic(${id}) error:`, err);
+      return null;
+    }
+  }
+
+  async getAllTopics() {
+    if (this.loadPromise) return this.loadPromise;
+
+    this.loadPromise = (async () => {
+      const manifest = await this.getManifest();
+      const topicList = (manifest && Array.isArray(manifest.topics)) ? manifest.topics : [];
+
+      if (topicList.length === 0) {
+        return [];
+      }
+
+      const topicPromises = topicList.map(async (id) => {
+        if (this.topicCache.has(id)) {
+          return this.topicCache.get(id);
+        }
+
+        try {
+          const res = await fetch(`${this.topicsDir}/${id}.md`);
+          if (res.ok) {
+            const md = await res.text();
+            const topic = parseTopicMarkdown(md);
+            this.topicCache.set(id, topic);
+            return topic;
+          }
+        } catch (e) {
+          console.warn(`Could not load ${id}.md:`, e);
+        }
+        return null;
+      });
+
+      const loaded = await Promise.all(topicPromises);
+      return loaded.filter(Boolean);
+    })();
+
+    return this.loadPromise;
+  }
+}
+
 export class CourseSdk {
   constructor(topics = []) {
     this.topics = Array.isArray(topics) ? topics : [];
+    this.service = new CourseService();
+    this.isLoaded = false;
+  }
+
+  async init() {
+    if (this.isLoaded && this.topics.length > 0) return this.topics;
+    const loadedTopics = await this.service.getAllTopics();
+    if (loadedTopics.length > 0) {
+      this.topics = loadedTopics;
+      this.isLoaded = true;
+    }
+    return this.topics;
   }
 
   setTopics(topics) {
     if (Array.isArray(topics)) {
       this.topics = topics;
+      this.isLoaded = true;
     }
   }
 
   getTopics() {
-    if (this.topics.length === 0 && typeof window !== 'undefined' && Array.isArray(window.TOPICS)) {
-      this.topics = window.TOPICS;
-    }
     return this.topics;
   }
 
-  getTopicById(id) {
-    const all = this.getTopics();
-    return all.find((t) => t.id === id) || null;
+  async getTopicById(id) {
+    const found = this.topics.find((t) => t.id === id);
+    if (found) return found;
+    return await this.service.getTopic(id);
   }
 
   searchTopics(query = '') {
@@ -133,6 +227,9 @@ export class CourseSdk {
 }
 
 export const courseSdk = new CourseSdk();
+export const courseService = courseSdk.service;
+
 if (typeof window !== 'undefined') {
   window.courseSdk = courseSdk;
+  window.courseService = courseService;
 }

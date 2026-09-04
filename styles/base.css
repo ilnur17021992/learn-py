@@ -48,8 +48,7 @@ html, body {
 .file-tree-container,
 .terminal-output-container,
 .lesson-content-area,
-.sidebar-content,
-.modal-body {
+.sidebar-content {
   scrollbar-gutter: stable;
 }
 
