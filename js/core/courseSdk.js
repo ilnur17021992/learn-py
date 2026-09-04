@@ -10,6 +10,7 @@ export class CourseService {
     this.manifestPath = options.manifestPath || 'content/manifest.json';
     this.topicsDir = options.topicsDir || 'content/topics';
     this.manifest = null;
+    this.version = '1.0.0';
     this.topicCache = new Map();
     this.loadPromise = null;
   }
@@ -17,11 +18,12 @@ export class CourseService {
   async getManifest() {
     if (this.manifest) return this.manifest;
     try {
-      const response = await fetch(this.manifestPath);
+      const response = await fetch(`${this.manifestPath}?_t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`Failed to load manifest: ${response.status} ${response.statusText}`);
       }
       this.manifest = await response.json();
+      this.version = this.manifest?.version || '1.0.0';
       return this.manifest;
     } catch (err) {
       console.error('CourseService.getManifest error:', err);
@@ -35,7 +37,11 @@ export class CourseService {
     }
 
     try {
-      const response = await fetch(`${this.topicsDir}/${id}.md`);
+      if (!this.manifest) {
+        await this.getManifest();
+      }
+      const v = this.version ? `?v=${encodeURIComponent(this.version)}` : '';
+      const response = await fetch(`${this.topicsDir}/${id}.md${v}`);
       if (!response.ok) {
         throw new Error(`Failed to load topic ${id}: ${response.status}`);
       }
@@ -60,13 +66,14 @@ export class CourseService {
         return [];
       }
 
+      const v = this.version ? `?v=${encodeURIComponent(this.version)}` : '';
       const topicPromises = topicList.map(async (id) => {
         if (this.topicCache.has(id)) {
           return this.topicCache.get(id);
         }
 
         try {
-          const res = await fetch(`${this.topicsDir}/${id}.md`);
+          const res = await fetch(`${this.topicsDir}/${id}.md${v}`);
           if (res.ok) {
             const md = await res.text();
             const topic = parseTopicMarkdown(md);
